@@ -1,0 +1,204 @@
+/* Lobby HUD, measured off the 1920-wide reference screenshot. Sizes are in --u: one pixel of that shot, scaled
+   to the screen. Phones and small screens use a larger --u so buttons stay big enough to tap.
+   Fonts: Michroma (the rounded-square display face) for labels and numbers, Source Sans 3 Bold for quest titles. */
+.hud {
+  --u: min(calc(100vw / 1920), calc(100vh / 1031));
+  --display: "Michroma", "Arial Black", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  --ink: #0d0f14;
+  position: fixed; inset: 0; pointer-events: none; user-select: none;
+  font-family: var(--display); letter-spacing: -0.02em; color: #fff;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  .hud { --u: min(calc(100vw / 1300), calc(100vh / 720)); }
+}
+.hud button, .hud section, .hud nav > * { pointer-events: auto; }
+.hud button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; border: 0; padding: 0; background: none; }
+/* Buttons feel alive: they rise a little under the pointer, and lift and pop when clicked. */
+.hud button { transition: transform 0.15s ease, filter 0.15s ease; }
+.hud button:hover { transform: translateY(calc(-3 * var(--u))); filter: brightness(1.1); }
+.hud button.pop { animation: button-pop 0.32s ease-out; }
+@keyframes button-pop {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(calc(-9 * var(--u))) scale(1.08); }
+  70% { transform: translateY(calc(1 * var(--u))) scale(0.97); }
+  100% { transform: translateY(calc(-3 * var(--u))) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .hud button.pop { animation: none; } }
+
+.outlined { -webkit-text-stroke: calc(3.5 * var(--u)) var(--ink); paint-order: stroke fill; }
+
+/* ---- Right column: quests, trade, quick join -------------------------------------------------------- */
+.hud-right {
+  position: absolute; top: calc(42 * var(--u)); right: calc(19 * var(--u));
+  width: calc(322 * var(--u)); display: flex; flex-direction: column; align-items: stretch;
+}
+.tabs { display: flex; height: calc(44 * var(--u)); }
+.tab {
+  display: flex; align-items: center; justify-content: center; gap: calc(6 * var(--u));
+  border: calc(2 * var(--u)) solid #1c2a4f !important;
+  background: linear-gradient(#61666f, #42464e) !important;
+}
+.tab-quests { flex: 0 0 calc(162 * var(--u)); }
+.tab-trade { flex: 1; }
+.tab.active { background: linear-gradient(#4f93f7, #2e6bdb) !important; }
+.tab span { white-space: nowrap; }
+.tab-quests span { font-size: calc(14.5 * var(--u)); -webkit-text-stroke: calc(2.5 * var(--u)) var(--ink); paint-order: stroke fill; }
+.tab-trade span { font-size: calc(25 * var(--u)); -webkit-text-stroke: calc(3.5 * var(--u)) var(--ink); paint-order: stroke fill; }
+.tab-icon { width: calc(30 * var(--u)); height: calc(30 * var(--u)); }
+.tab-icon-wide { width: calc(42 * var(--u)); }
+
+.panel {
+  background: linear-gradient(rgba(44, 52, 70, 0.5), rgba(36, 42, 58, 0.62));
+  padding: calc(6 * var(--u)) calc(10 * var(--u)) calc(8 * var(--u)) calc(24 * var(--u));
+}
+.panel-title { margin: calc(3 * var(--u)) 0 calc(6 * var(--u)); text-align: left; font-weight: 400; font-size: calc(19 * var(--u)); }
+.panel-note { margin: calc(8 * var(--u)) 0; text-align: center; font: 700 calc(18 * var(--u)) var(--body); color: #dfe5ef; }
+
+.quest { display: flex; align-items: center; gap: calc(12 * var(--u)); padding: calc(3 * var(--u)) 0; }
+.quest-body { flex: 1; min-width: 0; }
+.quest-title {
+  font: 700 calc(27 * var(--u)) / 1.05 var(--body); letter-spacing: 0; white-space: nowrap;
+  -webkit-text-stroke: calc(3 * var(--u)) var(--ink); paint-order: stroke fill;
+}
+.quest-meta { display: flex; justify-content: space-between; align-items: center; margin-top: calc(1 * var(--u)); }
+.quest-progress { font-size: calc(19 * var(--u)); }
+.quest-reward { display: flex; align-items: center; gap: calc(5 * var(--u)); font-size: calc(19 * var(--u)); color: #ffb000; }
+.quest-coin { width: calc(22 * var(--u)); height: calc(22 * var(--u)); }
+.quest-state {
+  width: calc(62 * var(--u)); height: calc(36 * var(--u)); flex: none;
+  background: linear-gradient(#a3a7ae, #7f848d) !important; border: calc(1.5 * var(--u)) solid #c9ccd2 !important;
+  font: calc(10.5 * var(--u)) var(--display) !important; -webkit-text-stroke: calc(2 * var(--u)) var(--ink); paint-order: stroke fill;
+}
+.quest-state:disabled { cursor: default; }
+.quest-state.done { background: linear-gradient(#8be02c, #4cb51a) !important; border-color: #2a5f0e !important; }
+
+.quick-join { margin-top: calc(10 * var(--u)); }
+.quick-join-title { margin: 0 0 calc(4 * var(--u)); text-align: right; font-weight: 400; font-size: calc(27 * var(--u)); }
+.quick-join-list { display: flex; flex-direction: column; gap: calc(8 * var(--u)); padding: calc(8 * var(--u)); }
+.quick-join-entry { display: flex; align-items: center; gap: calc(6 * var(--u)); }
+.slot { width: calc(56 * var(--u)); height: calc(56 * var(--u)); flex: none; }
+.quick-join-reward { flex: 1; display: flex; align-items: center; gap: calc(4 * var(--u)); font-size: calc(13 * var(--u)); color: #ffb000; }
+.quick-join-coin { width: calc(24 * var(--u)); height: calc(24 * var(--u)); }
+.join-button {
+  width: calc(74 * var(--u)); height: calc(40 * var(--u)); font-size: calc(19 * var(--u)) !important;
+  background: linear-gradient(#4a92ff, #1f5fd6) !important; border: calc(2 * var(--u)) solid #0f2f6a !important;
+}
+
+/* ---- Left column: odds offer, store, inventory, emotes ---------------------------------------------- */
+.side-menu {
+  position: absolute; left: calc(40 * var(--u)); top: calc(180 * var(--u));
+  display: flex; flex-direction: column; align-items: flex-start;
+}
+.odds-card {
+  position: relative; width: calc(118 * var(--u)); height: calc(118 * var(--u)); overflow: visible;
+  border: calc(3 * var(--u)) solid #b33ee6 !important;
+  background: radial-gradient(circle at 50% 45%, #5a1f86, #23083c 78%) !important;
+}
+.odds-badge {
+  position: absolute; left: 0; top: calc(-6 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u));
+  background: #2f63dc; border: calc(2 * var(--u)) solid #dfe8ff; border-radius: calc(5 * var(--u));
+  font: 800 calc(16 * var(--u)) var(--body); letter-spacing: 0.02em;
+}
+.odds-art {
+  position: absolute; left: 50%; top: 46%; width: calc(76 * var(--u)); height: calc(76 * var(--u)); transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(220, 150, 255, 0.55), transparent 18%),
+    repeating-conic-gradient(from 20deg, #6d2fa8 0 22deg, #3b0f63 22deg 45deg),
+    #4a1878;
+  box-shadow: 0 0 calc(10 * var(--u)) rgba(180, 90, 255, 0.55), inset 0 0 calc(14 * var(--u)) rgba(0, 0, 0, 0.6);
+}
+/* Price hangs off the card's right edge: old price struck through in red, new price under it in green. */
+.odds-price {
+  position: absolute; right: calc(-24 * var(--u)); top: calc(48 * var(--u)); z-index: 1;
+  display: grid; grid-template-columns: auto auto; align-items: center; justify-items: end; column-gap: calc(3 * var(--u));
+  font-family: var(--body); font-weight: 800; line-height: 1;
+}
+.odds-old {
+  grid-column: 1 / 3; position: relative; text-decoration: none; color: #ff3b3b; font-size: calc(23 * var(--u));
+  -webkit-text-stroke: calc(3 * var(--u)) #2a0006; paint-order: stroke fill;
+}
+.odds-old::after {
+  content: ""; position: absolute; left: calc(-6 * var(--u)); right: calc(-14 * var(--u)); top: 55%;
+  height: calc(3 * var(--u)); background: #e01010; transform: rotate(-12deg);
+}
+.odds-bux { width: calc(28 * var(--u)); height: calc(28 * var(--u)); }
+.odds-new { color: #5cff4a; font-size: calc(25 * var(--u)); -webkit-text-stroke: calc(3 * var(--u)) #0a2d0f; paint-order: stroke fill; }
+.odds-name {
+  position: absolute; left: 0; right: 0; bottom: calc(5 * var(--u)); text-align: center;
+  font: 700 calc(12.5 * var(--u)) var(--body); letter-spacing: -0.01em; white-space: nowrap; -webkit-text-stroke: calc(3 * var(--u)) #000; paint-order: stroke fill;
+}
+
+.menu-card {
+  position: relative; width: calc(118 * var(--u)); height: calc(124 * var(--u));
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: calc(10 * var(--u)) !important;
+  background: linear-gradient(#24314f, #18213a) !important; border: calc(2 * var(--u)) solid #8597bd !important;
+}
+.side-menu > .menu-card:nth-of-type(2) { margin-top: calc(32 * var(--u)); }
+.side-menu > .menu-card:nth-of-type(3) { margin-top: calc(24 * var(--u)); }
+.menu-icon { width: calc(78 * var(--u)); height: calc(78 * var(--u)); }
+.menu-label {
+  position: absolute; bottom: calc(-9 * var(--u)); font-size: calc(19.5 * var(--u)); letter-spacing: -0.05em; white-space: nowrap;
+  -webkit-text-stroke: calc(4 * var(--u)) var(--ink); paint-order: stroke fill;
+}
+
+.emotes-button {
+  margin-top: calc(26 * var(--u));
+  display: flex; align-items: center; gap: calc(8 * var(--u)); height: calc(60 * var(--u)); padding: 0 calc(6 * var(--u)) 0 calc(10 * var(--u)) !important;
+  background: linear-gradient(#1f2b4b, #172140) !important; border: calc(2 * var(--u)) solid #3b66d6 !important;
+  font-size: calc(18 * var(--u)) !important;
+}
+.emotes-icon { width: calc(34 * var(--u)); height: calc(34 * var(--u)); }
+.key-hint {
+  display: grid; place-items: center; width: calc(28 * var(--u)); height: calc(34 * var(--u));
+  font: calc(16 * var(--u)) var(--display); background: #4a5163; border: calc(2 * var(--u)) solid #9aa2b4; border-radius: calc(4 * var(--u));
+}
+
+/* ---- Bottom left: boost, coins, gems ---------------------------------------------------------------- */
+.wallet {
+  position: absolute; left: calc(28 * var(--u)); bottom: calc(36 * var(--u));
+  display: flex; flex-direction: column; align-items: flex-start; gap: calc(6 * var(--u));
+}
+.boost {
+  display: flex; align-items: center; gap: calc(14 * var(--u)); margin: 0 0 calc(10 * var(--u)) calc(4 * var(--u));
+  padding: calc(4 * var(--u)) calc(12 * var(--u)) calc(4 * var(--u)) calc(6 * var(--u));
+  background: rgba(16, 22, 34, 0.55); border: calc(3 * var(--u)) solid #e7b416; border-radius: calc(4 * var(--u));
+}
+.boost-coin { position: relative; width: calc(48 * var(--u)); height: calc(40 * var(--u)); }
+.boost-coin-icon { width: calc(38 * var(--u)); height: calc(38 * var(--u)); }
+.boost-x {
+  position: absolute; right: calc(-10 * var(--u)); bottom: calc(-4 * var(--u)); font-size: calc(22 * var(--u)); font-style: italic;
+  color: #ff8a1e; -webkit-text-stroke: calc(3 * var(--u)) #3a1600; paint-order: stroke fill;
+}
+.boost-time { font-size: calc(24 * var(--u)); }
+
+.balance {
+  display: flex; align-items: center; gap: calc(14 * var(--u)); padding-right: calc(70 * var(--u));
+  background: linear-gradient(90deg, transparent calc(40 * var(--u)), rgba(30, 40, 62, 0.82) calc(60 * var(--u)), rgba(30, 40, 62, 0.55) 70%, transparent);
+}
+.balance-icon { width: calc(78 * var(--u)); height: calc(78 * var(--u)); filter: drop-shadow(0 calc(3 * var(--u)) 0 rgba(0, 0, 0, 0.3)); }
+.balance-icon.gem { width: calc(84 * var(--u)); }
+.balance-value {
+  font-size: calc(50 * var(--u)); line-height: 1.2; letter-spacing: -0.04em;
+  -webkit-text-stroke: calc(6 * var(--u)) var(--ink); paint-order: stroke fill;
+}
+/* Solid gold: a gradient fill (background-clip: text) would be painted over by the outline. */
+.coins-value { color: #ffbf1c; text-shadow: 0 calc(-1 * var(--u)) 0 #ffe36b; }
+.gems-value { color: #d4f3ff; }
+
+/* ---- Bottom centre: level reward and Play --------------------------------------------------------- */
+.play-dock {
+  position: absolute; left: 50%; bottom: calc(36 * var(--u)); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: calc(20 * var(--u));
+}
+.hud .level-reward {
+  display: flex; align-items: center; gap: calc(8 * var(--u)); height: calc(52 * var(--u));
+  padding: 0 calc(6 * var(--u)) 0 calc(16 * var(--u)); background: rgba(52, 56, 68, 0.9); font-size: calc(22 * var(--u));
+}
+.level-ring { width: calc(68 * var(--u)); height: calc(68 * var(--u)); margin: calc(-8 * var(--u)) 0; }
+.play-button {
+  width: calc(290 * var(--u)); height: calc(63 * var(--u)); font-size: calc(42 * var(--u)) !important;
+  background: linear-gradient(#80e31f, #62c814 55%, #4fb10c) !important; border: calc(2 * var(--u)) solid #1d3a0b !important;
+  -webkit-text-stroke: calc(5 * var(--u)) var(--ink) !important;
+}

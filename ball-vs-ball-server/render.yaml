@@ -1,0 +1,16 @@
+# Render Blueprint for the game server. In Render: New → Blueprint, pick this repo and set
+# "Blueprint Path" to ball-vs-ball-server/render.yaml (or create a Web Service by hand with the same values).
+services:
+  - type: web
+    name: ball-vs-ball-server
+    runtime: node
+    plan: free
+    rootDir: ball-vs-ball-server
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: CLIENT_ORIGIN
+        sync: false

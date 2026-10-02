@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+# Saved player data written at runtime (see src/progress/profileStore.js).
+data/*.json
+data/*.tmp
