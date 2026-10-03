@@ -1,0 +1,544 @@
+import * as THREE from 'three';
+import { getAvatarSpec, getPlayerName } from '../../bloxity/sdk.js';
+import { ARENA_BASE } from '../../config/layout.js';
+import { readMove } from '../../controls/playerInput.js';
+import { createSmokeBurst } from '../../effects/duelFx.js';
+import { arenaState, duelAim, duelChoose, duelReroll, joinArena, leaveArena } from '../../net/api.js';
+import { createFightView } from '../../objects/duel/fightView.js';
+import { createHeartsSprite } from '../../objects/duel/heartsSprite.js';
+import { createLegionCharacter } from '../../objects/player/LegionCharacter.js';
+import { SIDES } from '../../objects/props/DuelArena.js';
+import { DUEL } from '../../shared/constants.js';
+import { DUEL_TIMING, otherSide } from '../../shared/duelMatch.js';
+import { SIM, START } from '../../shared/duelSim.js';
+import { createHeadshot } from '../headshot.js';
+import { createLocalDuel } from './localDuel.js';
+
+const POLL_MS = 500;
+const MS_PER_TICK = 1000 / SIM.tickRate;
+// After the fight ends (ms): the winning ball leaves the box, and lands on the loser's head.
+const FLIGHT = { start: 350, impact: 1350 };
+// The camera turns toward the loser for the hit, holds, and turns back (ms after the fight ends).
+const PAN = { in: 250, full: 900, hold: 2900, out: 3800 };
+const OPEN_PHASES = new Set(['choose', 'aim', 'fight', 'over']);
+const FORCE_BOT = new URLSearchParams(window.location.search).has('bot');
+
+const remoteHost = {
+  local: false,
+  state: arenaState,
+  choose: duelChoose,
+  aim: duelAim,
+  reroll: duelReroll,
+  leave: leaveArena,
+};
+
+const smooth = (t) => t * t * (3 - 2 * t);
+const clamp01 = (t) => Math.min(1, Math.max(0, t));
+const easeOutBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+
+function disposeCharacter(character) {
+  character.group.removeFromParent();
+  character.group.traverse((object) => {
+    if (!object.isMesh) return;
+    object.geometry.dispose();
+    object.material.map?.dispose();
+    object.material.dispose();
+  });
+}
+
+/**
+ * The 1v1 duel, from the player's side. In the lobby it watches for the character standing on an arena square
+ * and offers "E Join" there; joining stands the character on the square facing the lane, turns the camera onto
+ * the duel box, and follows the duel (the game server's, polled; or a local one against a bot when the server
+ * can't be reached, or with ?bot=1), staging each phase in the world:
+ *   waiting  the box rises behind the player with their picture on its VS screen
+ *   intro    the opponent appears on the other square; 3, 2, 1 on the screen; the spotlights shoot up
+ *   choose   the VS screen rolls up, opening the box (the HUD shows the ball cards)
+ *   aim      both balls in the box; the player drags (or uses A/D) to turn their dashed arrow
+ *   fight    the balls fight; then the winning ball flies out of the box at the loser's head, black smoke
+ *            bursts round them and a heart pops off
+ *   over     the result; then both step off their squares
+ * `onChange(hud)` tells the HUD what to show (see `hudState`); `onProfile(profile)` passes on coin and gem
+ * changes. `update(dt, seconds)` runs it all each frame and returns true while it needs drawing.
+ */
+export function createDuelDirector({ scene, camera, canvas, renderer, arenas, character, headshot, controls, onChange, onProfile }) {
+  const smoke = createSmokeBurst(scene);
+  const fightViews = new Map();
+  const fightViewOf = (arenaId, arena) => {
+    if (!fightViews.has(arenaId)) fightViews.set(arenaId, createFightView(arena));
+    return fightViews.get(arenaId);
+  };
+  const myHearts = createHeartsSprite();
+  myHearts.group.visible = false;
+  scene.add(myHearts.group);
+
+  let seat = null; // { arenaId, spot, arena, host, fightView, name }
+  let view = null; // the duel as the host last described it, or null while waiting
+  let clockOffset = 0; // server clock minus ours
+  let clockSynced = false;
+  let pollTimer = 0;
+  let prompt = null; // { arenaId, spot, arena } the square the character stands on, while not seated
+  let promptScreen = null;
+  let note = null; // { text, until }
+  let myPicture = null;
+  let opponent = null; // { key, side, character, headshot, texture, picture, hearts, appear }
+  let roundKey = null;
+  let chosen = null; // the ball picked this round (before the host confirms it)
+  let aimLocked = false;
+  let aim = { x: 1, y: 0 };
+  let strike = { key: null, flight: null, impacted: false };
+  let lastHudKey = '';
+  let occupantsKey = '';
+
+  const serverNow = () => Date.now() + clockOffset;
+  const flashNote = (text) => { note = { text, until: performance.now() + 2600 }; };
+
+  // ---- Lobby: the "E Join" prompt --------------------------------------------------------------------
+  const anchor = new THREE.Vector3();
+  const updatePrompt = () => {
+    prompt = null;
+    for (const [arenaId, arena] of arenas) {
+      if (arena.mode !== 'pads') continue;
+      const spot = arena.spotAt(character.group.position);
+      if (spot) {
+        prompt = { arenaId, spot, arena };
+        break;
+      }
+    }
+    promptScreen = null;
+    if (!prompt) return;
+    prompt.arena.spotPose(prompt.spot, anchor);
+    anchor.y += 7.4;
+    anchor.project(camera);
+    if (anchor.z > 1) return;
+    promptScreen = {
+      x: Math.round(((anchor.x + 1) / 2) * canvas.clientWidth),
+      y: Math.round(((1 - anchor.y) / 2) * canvas.clientHeight),
+    };
+  };
+
+  // ---- Joining and leaving ---------------------------------------------------------------------------
+  const avatarForServer = () => {
+    const spec = getAvatarSpec();
+    return { skinUrl: spec.skinUrl, skinId: spec.equipped?.skinId };
+  };
+
+  async function join(arenaId, spot) {
+    if (seat) return;
+    const arena = arenas.get(arenaId);
+    if (!arena || arena.mode !== 'pads') return;
+    const mySeat = { arenaId, spot, arena, host: null, fightView: fightViewOf(arenaId, arena), name: getPlayerName() };
+    seat = mySeat;
+    prompt = null;
+    promptScreen = null;
+    // Stand on the square, facing the lane, and take the picture for the board.
+    character.group.rotation.y = arena.spotPose(spot, character.group.position);
+    character.update(0, 0);
+    headshot.capture();
+    myPicture = headshot.toDataURL();
+    arena.setLabelVisible(false);
+    occupantsKey = '';
+    clockSynced = false;
+    pushHud(true);
+
+    const player = { name: mySeat.name, avatar: avatarForServer() };
+    let host = null;
+    if (FORCE_BOT) host = createLocalDuel({ spot, player });
+    else {
+      const t0 = Date.now();
+      const result = await joinArena(arenaId, spot, player);
+      if (seat !== mySeat) {
+        // Left before the server answered.
+        if (result.ok && result.online) leaveArena();
+        return;
+      }
+      if (!result.ok) {
+        release({ tellServer: false });
+        flashNote('Someone is duelling here');
+        return;
+      }
+      host = result.online ? remoteHost : createLocalDuel({ spot, player });
+      if (result.online) applyState({ serverTime: result.serverTime, seated: true, arena: result.arena, duel: result.duel }, t0, Date.now());
+    }
+    mySeat.host = host;
+    poll();
+  }
+
+  async function poll() {
+    const mySeat = seat;
+    if (!mySeat?.host) return;
+    const t0 = Date.now();
+    const result = await mySeat.host.state();
+    if (seat !== mySeat) return;
+    if (result) applyState(result, t0, Date.now());
+    if (seat === mySeat) pollTimer = setTimeout(poll, POLL_MS);
+  }
+
+  function applyState(result, t0, t1) {
+    const estimate = result.serverTime - (t0 + t1) / 2;
+    clockOffset = clockSynced ? clockOffset + (estimate - clockOffset) * 0.25 : estimate;
+    clockSynced = true;
+    if (result.profile) onProfile(result.profile);
+    if (!result.seated) {
+      release({ tellServer: false });
+      return;
+    }
+    setView(result.duel ?? null);
+  }
+
+  function setView(next) {
+    view = next;
+    if (!view) {
+      removeOpponent();
+      roundKey = null;
+      return;
+    }
+    const key = `${view.id}:${view.round}`;
+    if (key !== roundKey) {
+      roundKey = key;
+      chosen = null;
+      aimLocked = false;
+      aim = { x: view.you === 'pink' ? 1 : -1, y: 0 };
+    }
+    ensureOpponent();
+  }
+
+  function release({ tellServer }) {
+    if (!seat) return;
+    const { arena, host, spot, fightView } = seat;
+    clearTimeout(pollTimer);
+    seat = null;
+    view = null;
+    roundKey = null;
+    if (tellServer && host) host.leave().then((left) => { if (left) arena.setPlayers(left.players, left.capacity, left.reward); });
+    fightView.clear();
+    endFlight();
+    arena.setOccupants({});
+    arena.setCountdown(null);
+    arena.setScreenOpen(false);
+    arena.resetBeams();
+    arena.setLabelVisible(true);
+    removeOpponent();
+    myHearts.group.visible = false;
+    // Step off the square, toward the lane, and hand the camera back.
+    const off = arena.group.localToWorld(new THREE.Vector3(-ARENA_BASE[0] / 2 - 3, 0, SIDES[spot].z));
+    character.group.position.x = off.x;
+    character.group.position.z = off.z;
+    controls.clearCinematic(character.group.position.clone().setY(character.group.position.y + 4.2));
+    pushHud(true);
+  }
+
+  // ---- The opponent's character ------------------------------------------------------------------------
+  function ensureOpponent() {
+    const side = otherSide(view.you);
+    if (opponent?.key === view.id) return;
+    removeOpponent();
+    const info = view.players[side];
+    const body = createLegionCharacter(info.avatar ?? {});
+    body.group.rotation.y = seat.arena.spotPose(side, body.group.position);
+    body.group.scale.setScalar(0.001);
+    scene.add(body.group);
+    const hearts = createHeartsSprite();
+    scene.add(hearts.group);
+    const mine = { key: view.id, side, character: body, headshot: createHeadshot(renderer, scene, body), texture: null, picture: null, hearts, appear: 0 };
+    opponent = mine;
+    occupantsKey = '';
+    body.ready.then(() => {
+      if (opponent !== mine) return;
+      body.update(0, 0);
+      const scale = body.group.scale.x;
+      body.group.scale.setScalar(1); // the picture is taken at full size
+      body.group.updateMatrixWorld(true);
+      mine.headshot.capture();
+      body.group.scale.setScalar(scale);
+      mine.texture = mine.headshot.texture;
+      mine.picture = mine.headshot.toDataURL();
+      occupantsKey = '';
+    });
+  }
+
+  function removeOpponent() {
+    if (!opponent) return;
+    disposeCharacter(opponent.character);
+    opponent.headshot.dispose();
+    opponent.hearts.group.removeFromParent();
+    opponent = null;
+    occupantsKey = '';
+  }
+
+  // ---- Aiming --------------------------------------------------------------------------------------
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let aiming = null; // pointer id of the drag that aims
+  const canAim = () => seat && view?.phase === 'aim' && !aimLocked && !view.players[view.you].locked;
+  const aimAt = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = seat.arena.pickSim(raycaster.ray);
+    if (!hit) return;
+    const [sx, sy] = START[view.you];
+    const dx = hit.x - sx;
+    const dy = hit.y - sy;
+    const length = Math.hypot(dx, dy);
+    if (length > 3) aim = { x: dx / length, y: dy / length };
+  };
+  const onPointerDown = (event) => {
+    if (!canAim()) return;
+    aiming = event.pointerId;
+    aimAt(event);
+  };
+  const onPointerMove = (event) => { if (aiming === event.pointerId && canAim()) aimAt(event); };
+  const onPointerUp = (event) => { if (aiming === event.pointerId) aiming = null; };
+  const onKeyDown = (event) => {
+    if (event.code !== 'KeyE' || event.repeat || event.target.closest?.('input, textarea')) return;
+    if (!seat && prompt) join(prompt.arenaId, prompt.spot);
+  };
+
+  // ---- Staging each phase ------------------------------------------------------------------------------
+  const head = new THREE.Vector3();
+  const characterOf = (side) => (side === seat.spot ? character : opponent?.character);
+  const heartsOf = (side) => {
+    if (!view) return DUEL_TIMING.hearts;
+    let hearts = view.players[side].hearts;
+    // The loser's heart goes when the ball lands, not when the server worked out the fight.
+    if (view.phase === 'fight' && view.fight.loser === side && !(strike.key === roundKey && strike.impacted)) hearts += 1;
+    return hearts;
+  };
+
+  function endFlight() {
+    strike.flight?.model?.dispose();
+    strike = { key: null, flight: null, impacted: false };
+  }
+
+  const from = new THREE.Vector3();
+  const control = new THREE.Vector3();
+  const to = new THREE.Vector3();
+  function stageStrike(now, fight) {
+    if (strike.key !== roundKey) {
+      endFlight();
+      strike.key = roundKey;
+    }
+    const since = now - fight.endsAt;
+    if (since < FLIGHT.start || strike.impacted) return;
+    const loser = characterOf(fight.loser);
+    if (!strike.flight) {
+      if (since > FLIGHT.impact + 600) {
+        strike.impacted = true; // joined too late to see it fly: just count the hit
+        return;
+      }
+      const model = seat.fightView.takeStriker();
+      if (model) scene.attach(model.group);
+      strike.flight = { model, from: model ? model.group.position.clone() : null, scale: model?.group.scale.x ?? 1 };
+    }
+    loser?.headPosition(to);
+    const t = clamp01((since - FLIGHT.start) / (FLIGHT.impact - FLIGHT.start));
+    const { model } = strike.flight;
+    if (model) {
+      // Out of the box and over in an arc, growing as it comes toward the camera, spinning.
+      from.copy(strike.flight.from);
+      control.addVectors(from, to).multiplyScalar(0.5);
+      control.y += 6;
+      const u = t * t * (3 - 2 * t) * 0.6 + t * 0.4;
+      model.group.position.set(0, 0, 0)
+        .addScaledVector(from, (1 - u) * (1 - u))
+        .addScaledVector(control, 2 * u * (1 - u))
+        .addScaledVector(to, u * u);
+      model.group.scale.setScalar(strike.flight.scale * (1 + Math.sin(t * Math.PI) * 0.9));
+      model.group.rotation.z -= 0.35;
+    }
+    if (t >= 1) {
+      strike.impacted = true;
+      smoke.burst(to);
+      loser?.flinch();
+      model?.dispose();
+      strike.flight.model = null;
+    }
+  }
+
+  const camPosition = new THREE.Vector3();
+  const camTarget = new THREE.Vector3();
+  function stageCamera(now) {
+    let toward = null;
+    let amount = 0;
+    if (view?.phase === 'fight') {
+      const since = now - view.fight.endsAt;
+      toward = view.fight.loser;
+      if (since >= PAN.in && since < PAN.out) {
+        amount = since < PAN.full ? smooth((since - PAN.in) / (PAN.full - PAN.in)) : since < PAN.hold ? 1 : 1 - smooth((since - PAN.hold) / (PAN.out - PAN.hold));
+      }
+    }
+    seat.arena.framing(camera.fov, camera.aspect, camPosition, camTarget, toward, amount);
+    controls.setCinematic(camPosition, camTarget);
+  }
+
+  function stage(dt, time) {
+    const now = serverNow();
+    const { arena, fightView, spot } = seat;
+    const phase = view?.phase ?? 'waiting';
+
+    const key = `${Boolean(opponent)}:${Boolean(opponent?.texture)}`;
+    if (key !== occupantsKey) {
+      occupantsKey = key;
+      arena.setOccupants({ [spot]: headshot.texture, [otherSide(spot)]: opponent ? (opponent.texture ?? true) : false });
+    }
+
+    if (phase === 'intro') {
+      const left = view.phaseEndsAt - now;
+      arena.setCountdown(left > 1000 ? Math.min(3, Math.ceil((left - 1000) / 1000)) : null);
+      if (left < 1000) arena.launchBeams();
+    } else {
+      arena.setCountdown(null);
+      if (!view) arena.resetBeams();
+    }
+    arena.setScreenOpen(OPEN_PHASES.has(phase));
+
+    if (phase === 'aim') {
+      fightView.lineup({ pink: view.players.pink.ball, blue: view.players.blue.ball }, view.you);
+      if (canAim()) {
+        const turn = readMove().x;
+        if (Math.abs(turn) > 0.05) {
+          const angle = Math.atan2(aim.y, aim.x) - turn * 2.4 * dt;
+          aim = { x: Math.cos(angle), y: Math.sin(angle) };
+        }
+      }
+      fightView.setAim(aim);
+      fightView.showArrow(true);
+    } else if (phase === 'fight') {
+      const { fight } = view;
+      fightView.start(fight);
+      fightView.advanceTo(Math.max(0, Math.min(fight.ticks, Math.floor((now - fight.startsAt) / MS_PER_TICK))));
+      stageStrike(now, fight);
+    } else {
+      fightView.clear();
+      if (strike.flight) endFlight();
+    }
+    fightView.update(dt, time);
+
+    // Characters: the opponent pops in; both stand idle; hearts float over their heads.
+    const duelOn = Boolean(view);
+    myHearts.group.visible = duelOn;
+    if (duelOn) {
+      myHearts.setCount(heartsOf(spot));
+      character.headPosition(head);
+      myHearts.group.position.copy(head).add(new THREE.Vector3(0, 1.9, 0));
+      myHearts.update(dt);
+    }
+    if (opponent) {
+      opponent.appear = Math.min(1, opponent.appear + dt / 0.45);
+      opponent.character.group.scale.setScalar(Math.max(0.001, easeOutBack(opponent.appear)));
+      opponent.character.update(dt, 0);
+      opponent.hearts.setCount(heartsOf(opponent.side));
+      opponent.character.headPosition(head);
+      opponent.hearts.group.position.copy(head).add(new THREE.Vector3(0, 1.9, 0));
+      opponent.hearts.update(dt);
+    }
+    stageCamera(now);
+  }
+
+  // ---- The HUD ---------------------------------------------------------------------------------------
+  function hudState() {
+    const now = serverNow();
+    const noteText = note && performance.now() < note.until ? note.text : null;
+    if (!seat) return { prompt: promptScreen, note: noteText, duel: null };
+    const me = seat.spot;
+    const phase = view?.phase ?? 'waiting';
+    const pictures = { [me]: myPicture, [otherSide(me)]: opponent?.picture ?? null };
+    const playerOf = (side) => {
+      if (!view) return side === me ? { name: seat.name, hearts: DUEL_TIMING.hearts, ball: null, picture: myPicture } : null;
+      const p = view.players[side];
+      const ball = side === me ? p.ball ?? chosen : p.ball;
+      return { name: p.name, hearts: heartsOf(side), ball, chosen: p.chosen || (side === me && Boolean(chosen)), locked: p.locked, picture: pictures[side] };
+    };
+    const timed = phase === 'choose' || phase === 'aim';
+    const fight = view?.fight;
+    return {
+      prompt: null,
+      note: noteText,
+      duel: {
+        phase,
+        you: me,
+        local: Boolean(seat.host?.local),
+        secondsLeft: timed ? Math.max(0, Math.ceil((view.phaseEndsAt - now) / 1000)) : null,
+        players: { pink: playerOf('pink'), blue: playerOf('blue') },
+        offers: view?.players[me].offers ?? [],
+        chosen: view?.players[me].ball ?? chosen,
+        locked: aimLocked || Boolean(view?.players[me].locked),
+        fightBanner: Boolean(fight) && now > fight.startsAt - 700 && now < fight.startsAt + 650,
+        result: phase === 'over' ? { won: view.winner === me, reward: DUEL.winReward, endedBy: view.endedBy } : null,
+        rerollCost: DUEL_TIMING.rerollCost,
+      },
+    };
+  }
+
+  function pushHud(force = false) {
+    const hud = hudState();
+    // Pictures are long data URLs: compare whether they are there, not the URLs themselves.
+    const key = JSON.stringify(hud, (k, v) => (k === 'picture' ? Boolean(v) : v));
+    if (!force && key === lastHudKey) return;
+    lastHudKey = key;
+    onChange(hud);
+  }
+
+  // ---- Actions from the HUD ------------------------------------------------------------------------------
+  const answer = (result) => {
+    if (result?.profile) onProfile(result.profile);
+    if (result?.duel && seat) setView(result.duel);
+    return result;
+  };
+
+  const actions = {
+    join: () => { if (!seat && prompt) join(prompt.arenaId, prompt.spot); },
+    leave: () => release({ tellServer: true }),
+    choose: (ball) => {
+      if (!seat?.host || view?.phase !== 'choose') return;
+      chosen = ball;
+      seat.host.choose(ball).then(answer);
+    },
+    reroll: () => {
+      if (!seat?.host || view?.phase !== 'choose') return;
+      seat.host.reroll().then((result) => {
+        answer(result);
+        if (result?.error) flashNote(seat?.host?.local ? 'Rerolls need the game server' : 'Not enough gems');
+      });
+    },
+    lockAim: () => {
+      if (!canAim()) return;
+      aimLocked = true;
+      seat.host.aim(aim.x, aim.y).then(answer);
+    },
+  };
+
+  // ---- Every frame -------------------------------------------------------------------------------------
+  const update = (dt, time) => {
+    let active = false;
+    if (seat) {
+      stage(dt, time);
+      active = true;
+    } else {
+      updatePrompt();
+    }
+    if (smoke.update(dt)) active = true;
+    pushHud();
+    return active;
+  };
+
+  const start = () => {
+    window.addEventListener('keydown', onKeyDown);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  const dispose = () => {
+    if (seat) release({ tellServer: true });
+    window.removeEventListener('keydown', onKeyDown);
+    canvas.removeEventListener('pointerdown', onPointerDown);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
+  };
+
+  return { start, update, dispose, actions, get seated() { return Boolean(seat); } };
+}

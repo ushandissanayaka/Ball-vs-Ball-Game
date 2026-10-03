@@ -134,3 +134,40 @@ export function SlotIcon({ className, filled }) {
   );
 }
 
+
+export function HeartIcon({ className }) {
+  const id = useId();
+  return (
+    <svg className={className} viewBox="0 0 100 96" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff5a63" />
+          <stop offset="0.55" stopColor="#e8232f" />
+          <stop offset="1" stopColor="#b30f1b" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M50 90 C14 64 2 44 6 26 C10 6 38 0 50 22 C62 0 90 6 94 26 C98 44 86 64 50 90 Z"
+        fill={`url(#${id})`} stroke="#3d0509" strokeWidth="7" strokeLinejoin="round"
+      />
+      <ellipse cx="30" cy="26" rx="10" ry="7" fill="#fff" opacity="0.55" transform="rotate(-35 30 26)" />
+    </svg>
+  );
+}
+
+export function RefreshIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="none" stroke="#0d0f14" strokeWidth="13" strokeLinecap="round">
+        <path d="M50 26 A20 20 0 0 0 14 24" />
+        <path d="M14 38 A20 20 0 0 0 50 40" />
+      </g>
+      <g fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round">
+        <path d="M50 26 A20 20 0 0 0 14 24" />
+        <path d="M14 38 A20 20 0 0 0 50 40" />
+      </g>
+      <path d="M56 12 L54 32 L36 26 Z" fill="#fff" stroke="#0d0f14" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M8 52 L10 32 L28 38 Z" fill="#fff" stroke="#0d0f14" strokeWidth="3" strokeLinejoin="round" />
+    </svg>
+  );
+}

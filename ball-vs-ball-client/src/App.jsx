@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { applyAllSettings, gameplayStart, listenSetting, loadingEnd, startBloxity } from './bloxity/sdk.js';
 import { defaultQuality, QUALITY } from './config/graphics.js';
 import { fetchLobby, offlineLobby, offlineProfile, openSession } from './net/api.js';
@@ -13,6 +13,16 @@ export default function App() {
   const canvasRef = useRef(null);
   const [lobby, setLobby] = useState(offlineLobby);
   const [profile, setProfile] = useState(offlineProfile);
+  // The duel HUD: the Join prompt in the lobby, the duel itself once on a square (see scene/duel/duelDirector.js).
+  const [duel, setDuel] = useState({ prompt: null, note: null, duel: null });
+  const worldRef = useRef(null);
+  const duelActions = useMemo(() => ({
+    join: () => worldRef.current?.duel.join(),
+    leave: () => worldRef.current?.duel.leave(),
+    choose: (ball) => worldRef.current?.duel.choose(ball),
+    reroll: () => worldRef.current?.duel.reroll(),
+    lockAim: () => worldRef.current?.duel.lockAim(),
+  }), []);
 
   useEffect(() => {
     let disposed = false;
@@ -29,7 +39,8 @@ export default function App() {
       showLoadingStep('Building the arena', 0.35);
       // Let the bar paint before the (synchronous) world build.
       await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
-      world = createLobbyWorld(canvasRef.current, { quality: defaultQuality() });
+      world = createLobbyWorld(canvasRef.current, { quality: defaultQuality(), onDuelChange: setDuel, onProfile: setProfile });
+      worldRef.current = world;
 
       showLoadingStep('Connecting', 0.75);
       const [lobbyResult, session] = await Promise.all([fetchLobby(), openSession()]);
@@ -67,7 +78,7 @@ export default function App() {
   return (
     <>
       <canvas ref={canvasRef} className="world" tabIndex={0} />
-      <LobbyScreen lobby={lobby} profile={profile} />
+      <LobbyScreen lobby={lobby} profile={profile} duel={duel} duelActions={duelActions} />
     </>
   );
 }

@@ -5,6 +5,7 @@ import { config, isAllowedOrigin } from './config/env.js';
 import { healthRouter } from './routes/health.js';
 import { lobbyRouter } from './routes/lobby.js';
 import { sessionRouter } from './routes/session.js';
+import { arenaRouter } from './routes/arena.js';
 import { flushProfiles } from './progress/profileStore.js';
 
 const app = express();
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '16kb' }));
 app.use(healthRouter());
 app.use(lobbyRouter());
 app.use(sessionRouter());
+app.use(arenaRouter());
 app.use((_request, response) => response.status(404).json({ error: 'Not found' }));
 
 const server = app.listen(config.port, '0.0.0.0', () => {

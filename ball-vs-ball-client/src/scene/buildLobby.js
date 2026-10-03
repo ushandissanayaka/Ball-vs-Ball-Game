@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA_MODES, ARENA_ROWS, ARENA_X, FLOOR_Y, MASCOTS, PROPS } from '../config/layout.js';
+import { ARENA_BASE, ARENA_MODES, ARENA_ROWS, ARENA_X, FLOOR_Y, MASCOTS, PROPS, arenaBase } from '../config/layout.js';
 import { NeonBuilder } from '../effects/neon.js';
 import { createHub } from '../objects/platform/HubPlatform.js';
 import { createRunway } from '../objects/platform/Runway.js';
@@ -17,6 +17,7 @@ import { place } from '../util/mesh.js';
 import { batchStatic } from '../util/staticBatch.js';
 import { formatDayHour, nextLimitedOfferEnd, nextWeeklyReset } from '../shared/constants.js';
 import { SEED_LEADERBOARDS } from '../shared/lobbySeed.js';
+import { createWalkArea } from './walkArea.js';
 
 const weeklyTitle = (resetsAt, now) => `Weekly Top Spenders (${formatDayHour(resetsAt - now)})`;
 
@@ -48,7 +49,22 @@ export function buildLobby() {
 
   const shop = createLimitedShop();
   root.add(place(shop.group, PROPS.limitedShop.position, FLOOR_Y, PROPS.limitedShop.rotation));
+
+  // What the player character walks round: each station as a few circles over its footprint.
+  const walkArea = createWalkArea();
+  for (const board of [allTime.group, weekly.group]) for (const x of [-16, -6, 6, 16]) walkArea.addObstacle(board, 5, [x, 0]);
+  for (const spot of root.children.filter((child) => child.name === 'hex-pedestal')) walkArea.addObstacle(spot, 5);
+  const [portal, flyers, explosions, balls, info] = stations.map(([group]) => group);
+  walkArea.addObstacle(portal, 8.5);
+  walkArea.addObstacle(flyers, 7.5);
+  walkArea.addObstacle(explosions, 7);
+  for (const x of [-6.5, 6.5]) walkArea.addObstacle(balls, 7, [x, 0]);
+  walkArea.addObstacle(info, 4.5);
+  for (const x of [-5.5, 5.5]) walkArea.addObstacle(shop.group, 7.5, [x, 0]);
   shop.setEndsIn(formatDayHour(nextLimitedOfferEnd(now) - now));
+  // Room round the shop's show (bike, smoke column, chain spike), for the "is it on screen?" check.
+  shop.group.updateMatrixWorld(true);
+  const animatedBounds = new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(-2, 9, 0)), 20);
 
   // Arenas: W1..W5 on the west deck, E1..E5 on the east, north to south.
   const arenas = new Map();
@@ -57,6 +73,10 @@ export function buildLobby() {
       const arena = createDuelArena({ row, mode: ARENA_MODES[side][row] });
       root.add(place(arena.group, [x, z], FLOOR_Y, turn));
       arenas.set(`${side}${row + 1}`, arena);
+      const [baseWidth, baseDepth] = arenaBase(arena.mode);
+      walkArea.addStep(arena.group, baseWidth / 2, baseDepth / 2, 1.2);
+      // Match arenas' standing screens, along the base's outer edge.
+      if (arena.mode === 'match') for (const dz of [-8, -3, 3, 8]) walkArea.addObstacle(arena.group, 2.4, [ARENA_BASE[0] / 2 - 1.2, dz]);
     }
   });
 
@@ -86,5 +106,13 @@ export function buildLobby() {
     weekly.update({ title: weeklyTitle(weeklyResetsAt, time), rows: lobby?.leaderboards.weekly });
     shop.setEndsIn(formatDayHour((lobby?.limitedOffer.endsAt ?? nextLimitedOfferEnd(time)) - time));
   };
-  return { root, apply };
+  /** Moves the limited shop's show to `seconds`. */
+  const animate = (seconds) => shop.update(seconds);
+  /** Moves the arenas' VS boards; true while any is still moving. */
+  const updateArenas = (dt) => {
+    let moving = false;
+    for (const arena of arenas.values()) moving = arena.update(dt) || moving;
+    return moving;
+  };
+  return { root, apply, animate, animatedBounds, arenas, walkArea, updateArenas };
 }

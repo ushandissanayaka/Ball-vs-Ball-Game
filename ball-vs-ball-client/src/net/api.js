@@ -22,7 +22,7 @@ async function request(path, options = {}) {
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...options.headers },
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
     return await response.json();
   } finally {
     clearTimeout(timer);
@@ -66,6 +66,8 @@ export async function fetchLobby() {
 }
 
 /** Opens a guest session (remembering the guest id in this browser); falls back to the starter profile. */
+let sessionToken = null;
+
 export async function openSession() {
   let guestId = null;
   try {
@@ -80,8 +82,71 @@ export async function openSession() {
     } catch {
       // Not remembered; harmless.
     }
+    sessionToken = session.sessionToken;
     return { ...session, online: true };
   } catch {
     return { guestId, sessionToken: null, profile: offlineProfile(), online: false };
   }
 }
+
+/** Sends `body` with this guest's session; if the server has dropped the session, opens a new one and retries. */
+async function withSession(path, body) {
+  if (!sessionToken) await openSession();
+  if (!sessionToken) throw new Error('offline');
+  const send = () => request(path, { method: 'POST', body: JSON.stringify({ ...body, sessionToken }) });
+  try {
+    return await send();
+  } catch (error) {
+    if (error.status !== 401) throw error;
+    await openSession();
+    return send();
+  }
+}
+
+/**
+ * Stands this guest on an arena spot; `player` ({ name, avatar }) is what the opponent is shown. Resolves to
+ * { ok: true, online: true, arena, duel, serverTime }, { ok: false } when another player holds the spot (or a
+ * duel is on there), or { ok: true, online: false } when the server can't be reached (the client then plays
+ * the duel locally).
+ */
+export async function joinArena(arenaId, spot, player) {
+  try {
+    return { ok: true, online: true, ...(await withSession(ROUTES.arenaJoin, { arenaId, spot, ...player })) };
+  } catch (error) {
+    return error.status === 409 ? { ok: false, online: true } : { ok: true, online: false };
+  }
+}
+
+/** Takes this guest off their arena spot (forfeiting a duel in progress). Resolves to the arena they left (null when offline). */
+export async function leaveArena() {
+  try {
+    return (await withSession(ROUTES.arenaLeave, {})).arena;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where this guest stands and how their duel is going: { serverTime, seated, spot, arena, duel, profile }, or
+ * null if the server couldn't be reached this time. Poll it while on a spot: it also keeps the spot.
+ */
+export async function arenaState() {
+  try {
+    return await withSession(ROUTES.arenaState, {});
+  } catch {
+    return null;
+  }
+}
+
+const duelAction = async (route, body) => {
+  try {
+    return await withSession(route, body);
+  } catch (error) {
+    return { error: error.status ? 'refused' : 'offline' };
+  }
+};
+
+/** Duel moves. Each resolves to { serverTime, duel } (reroll adds the profile), or { error }. */
+export const duelChoose = (ball) => duelAction(ROUTES.duelChoose, { ball });
+export const duelAim = (x, y) => duelAction(ROUTES.duelAim, { x, y });
+export const duelReroll = () => duelAction(ROUTES.duelReroll, {});
