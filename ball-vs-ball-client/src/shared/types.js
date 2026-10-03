@@ -22,6 +22,30 @@
  * @property {{ multiplier: number, endsAt: number } | null} coinBoost
  * @property {QuestState[]} quests
  * @property {number} questsResetAt
+ *
+ * @typedef {Object} DuelPlayer   one side of a duel, as `viewFor` (shared/duelMatch.js) shows it
+ * @property {string} name
+ * @property {{ skinUrl?: string, equipped: { skinId?: string } }} avatar
+ * @property {number} hearts
+ * @property {boolean} chosen     picked a ball this round
+ * @property {boolean} locked     locked their aim this round
+ * @property {string | null} ball  a key of BALLS (shared/balls.js); the opponent's is null until both have chosen
+ * @property {string[]} [offers]  only your own: the three balls offered this round
+ * @property {number} [rerolls]
+ *
+ * @typedef {Object} DuelView   POST /api/arena/state → { serverTime, seated, spot, arena, duel, profile }
+ * @property {string} id
+ * @property {'intro' | 'choose' | 'aim' | 'fight' | 'over' | 'done' | 'canceled'} phase
+ * @property {number} round
+ * @property {'pink' | 'blue'} you
+ * @property {number} serverTime
+ * @property {number} phaseEndsAt
+ * @property {{ pink: DuelPlayer, blue: DuelPlayer }} players
+ * @property {{ setup: { seed: number, pink: { ball: string, aim: { x: number, y: number } }, blue: { ball: string, aim: { x: number, y: number } } },
+ *   startsAt: number, endsAt: number, ticks: number, winner: 'pink' | 'blue', loser: 'pink' | 'blue' } | null} fight
+ *   only while fighting: run `setup` through shared/duelSim.js to show it
+ * @property {'pink' | 'blue' | null} winner
+ * @property {'hearts' | 'forfeit' | null} endedBy
  */
 
 export {};

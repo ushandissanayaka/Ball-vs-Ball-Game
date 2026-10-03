@@ -69,6 +69,27 @@ export const MASCOT = {
   eyePale: '#dce8f6',
 };
 
+/** The duel box: its deep navy frame, the slate back the balls fight against, and the blue VS screen. */
+export const DUEL_BOX = {
+  frame: '#121a2e',
+  wall: '#26375a',
+  inset: '#22314f',
+  insetDark: '#111a2e',
+  screen: '#2a2ad8',
+  scanline: 'rgba(120, 140, 255, 0.35)',
+};
+
+/** Duel effects: damage numbers, the smoke that bursts round a player hit by the winning ball. */
+export const DUEL_FX = {
+  damage: '#ff2a2a',
+  burn: '#ff9a1f',
+  smoke: '#16181f',
+  smokeLight: '#2c303b',
+  ember: '#ff8a2a',
+  spark: '#ffffff',
+  heart: '#e8232f',
+};
+
 /** Ball colours used in the gacha machines and on the arena screens. */
 export const BALL_COLORS = ['#2f6fe0', '#e04646', '#3fbf5a', '#f2c230', '#9b59d6', '#f07a2a', '#29c3d6', '#ff7fbf', '#f4f6fb', '#2a2f40'];
 

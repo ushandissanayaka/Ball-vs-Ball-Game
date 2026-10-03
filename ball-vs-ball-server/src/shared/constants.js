@@ -8,6 +8,12 @@ export const ROUTES = {
   health: '/health',
   lobby: '/api/lobby',
   session: '/api/session',
+  arenaJoin: '/api/arena/join',
+  arenaLeave: '/api/arena/leave',
+  arenaState: '/api/arena/state',
+  duelChoose: '/api/duel/choose',
+  duelAim: '/api/duel/aim',
+  duelReroll: '/api/duel/reroll',
 };
 
 /** 1v1 duel arenas along the runway: `arenasPerSide` on the west (W) and east (E) platforms. */

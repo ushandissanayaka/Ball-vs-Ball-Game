@@ -22,8 +22,12 @@ export const RUNWAY = { startZ: 66, endZ: 340, laneHalf: 22, outerX: 62, tab: 14
 /** Arena rows (z of each arena's centre), north to south, mirrored on both sides of the lane. */
 export const ARENA_ROWS = [100, 150, 200, 250, 300];
 export const ARENA_X = (RUNWAY.laneHalf + RUNWAY.outerX) / 2;
-/** Arena base [width (x), depth (z)]. */
+/**
+ * Arena base [width (x), depth (z)]. Pads arenas are deeper: their two players stand either side of the duel box,
+ * level with it, as in the reference shots.
+ */
 export const ARENA_BASE = [20, 22];
+export const PADS_ARENA_BASE = [20, 30];
 /**
  * What stands on each arena, north to south: 'pads' (two player squares, the players label, hex gems) or
  * 'match' (the standing screen the balls fight on), mixed as in the reference shots.
@@ -33,11 +37,14 @@ export const ARENA_MODES = {
   E: ['pads', 'pads', 'match', 'match', 'match'],
 };
 
+/** The base size of an arena of `mode` ('pads' or 'match'). */
+export const arenaBase = (mode) => (mode === 'pads' ? PADS_ARENA_BASE : ARENA_BASE);
+
 /** Dark blocks hanging under the deck: [x, z, width, depth], one under each arena. Nothing hangs under the hub. */
 export const SUPPORTS = {
   drop: 16,
   blocks: [
-    ...ARENA_ROWS.flatMap((z) => [[-ARENA_X, z, ...ARENA_BASE], [ARENA_X, z, ...ARENA_BASE]]),
+    ...ARENA_ROWS.flatMap((z, row) => [[-ARENA_X, z, ...arenaBase(ARENA_MODES.W[row])], [ARENA_X, z, ...arenaBase(ARENA_MODES.E[row])]]),
   ],
 };
 
@@ -73,16 +80,18 @@ export const MASCOTS = {
   red: { position: [0, FLOOR_Y + 14.4, RUNWAY.endZ + RUNWAY.tab + 7], radius: 16, stretch: [1, 1, 1], lookAt: [0, FLOOR_Y + 14.4, 0] },
 };
 
+/** Where the player character starts: the open middle of the hub, facing north toward 2V2. */
+export const SPAWN = { position: [0, 22], facing: Math.PI };
+
 export const CAMERA = {
   fov: 55,
-  position: [0, FLOOR_Y + 84, 140],
-  target: [0, FLOOR_Y, -4],
-  minDistance: 25,
+  // Behind and above the spawned character, looking past it toward the hub's north end.
+  position: [0, FLOOR_Y + 26, 22 + 42],
+  target: [0, FLOOR_Y + 4, 22],
+  minDistance: 12,
   // Zooming out stops while the stage still fills a good part of the screen.
   maxDistance: 250,
   // Past horizontal, so the camera can look up at the deck from just above the water (see cameraControls).
   maxPolarAngle: 1.8,
   minHeight: 4,
-  // The point the camera orbits may not leave this area (so the map can't be lost off-screen).
-  bounds: { minX: -100, maxX: 100, minZ: -90, maxZ: 370 },
 };

@@ -2,13 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CAMERA } from '../config/layout.js';
 
-const PAN_SPEED = 90; // world units per second for WASD / arrow keys
-const KEYS = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
-
 /**
- * Free look around the lobby (no character yet): drag to orbit, wheel / pinch to zoom, right-drag or two-finger
- * drag to pan, WASD / arrows to glide. The orbit point stays over the map and the camera above the sea.
- * `update(dt)` returns true when the view changed (the world only re-renders then).
+ * Third-person camera round the player character: drag to orbit, wheel / pinch to zoom. `follow(point)` keeps
+ * the orbit point on the character as it walks (the camera keeps its angle and distance), and the camera never
+ * goes under the water. `view` ([x, y, z, tx, ty, tz], the ?cam= debug option) starts on a set view and stops
+ * following, for screenshots. `setCinematic(position, target)` takes the camera off the player (a duel): it
+ * glides to that shot and stays on it, following each new one; `clearCinematic(point)` hands it back, orbiting
+ * `point`. `update(dt)` returns true when the view changed.
  */
 export function createCameraControls(camera, element, view = null) {
   const controls = new OrbitControls(camera, element);
@@ -18,53 +18,53 @@ export function createCameraControls(camera, element, view = null) {
     controls.target.set(view[3], view[4], view[5]);
   }
   controls.enableDamping = true;
-  controls.dampingFactor = 0.09;
-  controls.screenSpacePanning = false; // pan across the floor, not up into the sky
+  controls.dampingFactor = 0.12;
+  controls.enablePan = false; // the character is the centre of the view
   controls.minDistance = CAMERA.minDistance;
   controls.maxDistance = CAMERA.maxDistance;
   controls.maxPolarAngle = CAMERA.maxPolarAngle;
   controls.zoomSpeed = 1.1;
   controls.update();
 
-  const held = new Set();
-  const onKeyDown = (event) => {
-    if (KEYS[event.code] && !event.target.closest?.('input, textarea')) held.add(event.code);
-  };
-  const onKeyUp = (event) => held.delete(event.code);
-  const onBlur = () => held.clear();
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', onBlur);
+  let cinematic = null; // { position, target } while a duel holds the camera
+  const look = new THREE.Vector3(); // where the camera looks during a cinematic shot
 
-  const forward = new THREE.Vector3();
-  const right = new THREE.Vector3();
-  const move = new THREE.Vector3();
-  const { bounds } = CAMERA;
+  const shift = new THREE.Vector3();
+  const follow = (point) => {
+    if (view || cinematic) return;
+    shift.subVectors(point, controls.target);
+    if (shift.lengthSq() < 1e-8) return;
+    controls.target.add(shift);
+    camera.position.add(shift);
+  };
+
+  const setCinematic = (position, target) => {
+    if (!cinematic) {
+      cinematic = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+      look.copy(controls.target);
+      controls.enabled = false;
+    }
+    cinematic.position.copy(position);
+    cinematic.target.copy(target);
+  };
+
+  const clearCinematic = (point) => {
+    if (!cinematic) return;
+    cinematic = null;
+    controls.target.copy(point);
+    controls.enabled = true;
+    controls.update();
+  };
 
   const update = (dt) => {
-    if (held.size) {
-      camera.getWorldDirection(forward).setY(0).normalize();
-      right.crossVectors(forward, camera.up).normalize();
-      move.set(0, 0, 0);
-      for (const code of held) {
-        const [x, z] = KEYS[code];
-        move.addScaledVector(right, x).addScaledVector(forward, z);
-      }
-      if (move.lengthSq() > 0) {
-        move.normalize().multiplyScalar(PAN_SPEED * dt);
-        controls.target.add(move);
-        camera.position.add(move);
-      }
-    }
-    // Keep the orbit point over the map; move the camera with it so the view doesn't swing.
-    const { x, z } = controls.target;
-    const clampedX = THREE.MathUtils.clamp(x, bounds.minX, bounds.maxX);
-    const clampedZ = THREE.MathUtils.clamp(z, bounds.minZ, bounds.maxZ);
-    if (clampedX !== x || clampedZ !== z) {
-      camera.position.x += clampedX - x;
-      camera.position.z += clampedZ - z;
-      controls.target.x = clampedX;
-      controls.target.z = clampedZ;
+    if (cinematic) {
+      // Glide, quickly at first then settling, so cuts between shots never jump.
+      const k = 1 - Math.exp(-dt * 4.5);
+      const before = camera.position.distanceToSquared(cinematic.position) + look.distanceToSquared(cinematic.target);
+      camera.position.lerp(cinematic.position, k);
+      look.lerp(cinematic.target, k);
+      camera.lookAt(look);
+      return before > 1e-6;
     }
     const changed = controls.update(dt);
     // The orbit may dip below the deck to look up at it, but the camera never goes under the water.
@@ -72,14 +72,8 @@ export function createCameraControls(camera, element, view = null) {
       camera.position.y = CAMERA.minHeight;
       camera.lookAt(controls.target);
     }
-    return changed || held.size > 0;
+    return changed;
   };
 
-  const dispose = () => {
-    controls.dispose();
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
-    window.removeEventListener('blur', onBlur);
-  };
-  return { update, dispose };
+  return { update, follow, setCinematic, clearCinematic, dispose: () => controls.dispose() };
 }

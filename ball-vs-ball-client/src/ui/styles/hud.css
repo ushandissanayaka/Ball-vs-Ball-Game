@@ -202,3 +202,188 @@
   background: linear-gradient(#80e31f, #62c814 55%, #4fb10c) !important; border: calc(2 * var(--u)) solid #1d3a0b !important;
   -webkit-text-stroke: calc(5 * var(--u)) var(--ink) !important;
 }
+
+/* ---- Waiting on an arena: status, Invite and Leave (replace the Play dock) ------------------------- */
+.waiting {
+  position: absolute; top: calc(8 * var(--u)); right: calc(20 * var(--u));
+  font-size: calc(20 * var(--u)); -webkit-text-stroke: calc(2.5 * var(--u)) var(--ink);
+}
+.queue-dock {
+  position: absolute; left: 50%; bottom: calc(26 * var(--u)); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: calc(26 * var(--u));
+}
+.invite-button {
+  width: calc(316 * var(--u)); height: calc(70 * var(--u)); font-size: calc(40 * var(--u)) !important;
+  background: linear-gradient(#4b8ff7, #2f6fe6 60%, #2a62cf) !important; border: calc(3 * var(--u)) solid #1b2b4d !important;
+  -webkit-text-stroke: calc(5 * var(--u)) var(--ink) !important;
+}
+.leave-button {
+  width: calc(484 * var(--u)); height: calc(86 * var(--u)); font-size: calc(56 * var(--u)) !important;
+  background: linear-gradient(#e30d0d, #c80000 60%, #b00000) !important; border: calc(3 * var(--u)) solid #3a0606 !important;
+  -webkit-text-stroke: calc(6 * var(--u)) var(--ink) !important;
+}
+.queue-note {
+  position: absolute; bottom: 100%; margin-bottom: calc(10 * var(--u)); white-space: nowrap;
+  font-size: calc(22 * var(--u)); -webkit-text-stroke: calc(3 * var(--u)) var(--ink);
+}
+
+/* ---- Touch thumb stick (bottom right); hidden where there is a mouse ------------------------------- */
+.joystick {
+  display: none; position: absolute; right: calc(48 * var(--u)); bottom: calc(48 * var(--u));
+  width: calc(190 * var(--u)); height: calc(190 * var(--u)); border-radius: 50%; touch-action: none;
+  background: rgba(16, 22, 38, 0.35); border: calc(3 * var(--u)) solid rgba(255, 255, 255, 0.45);
+}
+.joystick-knob {
+  position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85); box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.35);
+  transform: translate(calc(-50% + var(--kx, 0) * 70 * var(--u)), calc(-50% + var(--ky, 0) * 70 * var(--u)));
+}
+@media (pointer: coarse) { .joystick { display: block; } }
+
+/* ---- Duel: Join prompt over an arena square -------------------------------------------------------- */
+.hud .join-prompt {
+  position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: calc(16 * var(--u));
+  height: calc(64 * var(--u)); padding: 0 calc(30 * var(--u)) 0 calc(12 * var(--u)); border-radius: calc(10 * var(--u));
+  background: rgba(38, 42, 50, 0.82); box-shadow: 0 calc(4 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.3);
+  font: 700 calc(26 * var(--u)) var(--body); letter-spacing: 0; animation: prompt-in 0.2s ease-out;
+}
+.hud .join-prompt:hover { transform: translate(-50%, -100%) scale(1.05); }
+.hud .join-prompt.pop { animation: none; }
+.join-key {
+  display: grid; place-items: center; width: calc(44 * var(--u)); height: calc(44 * var(--u)); border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2); border: calc(2 * var(--u)) solid rgba(255, 255, 255, 0.75); font: 700 calc(22 * var(--u)) var(--body);
+}
+@keyframes prompt-in { from { opacity: 0; margin-top: calc(10 * var(--u)); } }
+.duel-note {
+  position: absolute; left: 50%; top: 22%; transform: translateX(-50%); white-space: nowrap;
+  font-size: calc(26 * var(--u)); -webkit-text-stroke: calc(4 * var(--u)) var(--ink);
+}
+
+/* ---- Duel: the players' corners (picture, name, hearts, ball) ------------------------------------------ */
+.hud .badge {
+  position: absolute; top: calc(50 * var(--u)); display: flex; flex-direction: column; gap: calc(16 * var(--u));
+  pointer-events: none; animation: badge-in 0.45s ease-out both;
+}
+.badge-pink { left: calc(36 * var(--u)); align-items: flex-start; --from: -40px; }
+.badge-blue { right: calc(36 * var(--u)); align-items: flex-end; --from: 40px; }
+@keyframes badge-in { from { opacity: 0; transform: translateX(var(--from)); } }
+.badge-top { display: flex; align-items: flex-start; gap: calc(6 * var(--u)); }
+.badge-blue .badge-top { flex-direction: row-reverse; }
+.badge-avatar {
+  width: calc(104 * var(--u)); height: calc(104 * var(--u)); flex: none; border-radius: 50%; overflow: hidden; box-sizing: border-box;
+  background: radial-gradient(circle at 50% 35%, #3d4c70, #1a2238); border: calc(4 * var(--u)) solid;
+  box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.35);
+}
+.badge-pink .badge-avatar { border-color: #e8343f; }
+.badge-blue .badge-avatar { border-color: #2fb8f5; }
+.badge-avatar img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.3) translateY(8%); }
+.badge-info { display: flex; flex-direction: column; gap: calc(6 * var(--u)); padding-top: calc(8 * var(--u)); }
+.badge-blue .badge-info { align-items: flex-end; }
+.badge-name { font-size: calc(30 * var(--u)); white-space: nowrap; -webkit-text-stroke: calc(5 * var(--u)) var(--ink); paint-order: stroke fill; }
+.badge-pink .badge-name { color: #ff2b3d; }
+.badge-blue .badge-name { color: #eef5ff; }
+.badge-hearts { display: flex; gap: calc(8 * var(--u)); min-height: calc(46 * var(--u)); }
+.badge-heart { width: calc(48 * var(--u)); height: calc(46 * var(--u)); filter: drop-shadow(0 calc(3 * var(--u)) 0 rgba(0, 0, 0, 0.25)); animation: heart-in 0.3s ease-out both; }
+@keyframes heart-in { from { transform: scale(0.4); opacity: 0; } }
+.badge-ball { display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--u)); width: calc(104 * var(--u)); }
+.badge-ball-name {
+  font: calc(30 * var(--u)) "Righteous", var(--display); white-space: nowrap; letter-spacing: 0;
+  -webkit-text-stroke: calc(5 * var(--u)) var(--ink); animation: heart-in 0.3s ease-out both;
+}
+.badge-ball-icon { width: calc(104 * var(--u)); height: calc(104 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.35)); }
+
+/* ---- Duel: choosing a ball (the world dims behind the cards) ------------------------------------------ */
+.duel-dim { position: absolute; inset: 0; background: rgba(4, 8, 18, 0.5); animation: dim-in 0.35s ease both; }
+@keyframes dim-in { from { opacity: 0; } }
+/* Sized to fit short (landscape phone) screens too. */
+.choose-title, .choose-cards, .choose-actions, .duel-wait { --cu: min(var(--u), calc(100vh / 900)); }
+.choose-title {
+  position: absolute; top: calc(66 * var(--cu)); left: 50%; transform: translateX(-50%); margin: 0;
+  font-weight: 400; font-size: calc(36 * var(--cu)); letter-spacing: 0.01em; white-space: nowrap;
+}
+.choose-cards { position: absolute; left: 50%; top: calc(178 * var(--cu)); transform: translateX(-50%); display: flex; gap: calc(98 * var(--cu)); }
+.hud .ball-card {
+  box-sizing: border-box; width: calc(296 * var(--cu)); height: calc(482 * var(--cu));
+  display: flex; flex-direction: column; align-items: center; padding: calc(50 * var(--cu)) calc(20 * var(--cu)) 0;
+  background: rgba(16, 21, 36, 0.96); border: calc(2 * var(--cu)) solid #e9edf5; animation: card-in 0.4s ease-out backwards;
+}
+.hud .ball-card:nth-child(2) { animation-delay: 0.06s; }
+.hud .ball-card:nth-child(3) { animation-delay: 0.12s; }
+@keyframes card-in { from { opacity: 0; transform: translateY(calc(30 * var(--u))) scale(0.94); } }
+.ball-card-name { font: 800 calc(25 * var(--cu)) var(--body); letter-spacing: 0; white-space: nowrap; }
+.ball-card-art {
+  display: grid; place-items: center; margin-top: calc(30 * var(--cu)); width: calc(172 * var(--cu)); height: calc(172 * var(--cu));
+  background: #4a4c55; border: calc(1.5 * var(--cu)) solid #6c6f79;
+}
+.ball-card-icon { width: calc(128 * var(--cu)); height: calc(128 * var(--cu)); }
+.ball-card-blurb { margin: auto 0 calc(66 * var(--cu)); font: 800 calc(24 * var(--cu)) / 1.25 var(--body); letter-spacing: 0; text-align: center; }
+.hud .ball-card.picked { border-color: #ffd23a; box-shadow: 0 0 0 calc(3 * var(--cu)) #ffd23a, 0 0 calc(30 * var(--cu)) rgba(255, 210, 58, 0.55); }
+.choose-cards.all { top: calc(150 * var(--cu)); display: grid; grid-template-columns: repeat(4, auto); gap: calc(20 * var(--cu)) calc(28 * var(--cu)); }
+.choose-cards.all .ball-card { width: calc(214 * var(--cu)); height: calc(272 * var(--cu)); padding-top: calc(18 * var(--cu)); }
+.choose-cards.all .ball-card-name { font-size: calc(20 * var(--cu)); }
+.choose-cards.all .ball-card-art { margin-top: calc(12 * var(--cu)); width: calc(108 * var(--cu)); height: calc(108 * var(--cu)); }
+.choose-cards.all .ball-card-icon { width: calc(82 * var(--cu)); height: calc(82 * var(--cu)); }
+.choose-cards.all .ball-card-blurb { margin-bottom: calc(16 * var(--cu)); font-size: calc(16.5 * var(--cu)); }
+.duel-wait {
+  position: absolute; left: 50%; top: calc(126 * var(--cu)); transform: translateX(-50%); white-space: nowrap;
+  font-size: calc(20 * var(--cu)); color: #ffd23a; -webkit-text-stroke: calc(3.5 * var(--cu)) var(--ink);
+}
+.choose-actions { position: absolute; left: 50%; top: calc(752 * var(--cu)); transform: translateX(-50%); display: flex; gap: calc(70 * var(--cu)); }
+.hud .all-balls, .hud .reroll {
+  position: relative; height: calc(76 * var(--cu)); background: linear-gradient(#8d85d9, #6e66c1); border: calc(2 * var(--cu)) solid #c9c3ff;
+}
+.hud .all-balls { width: calc(286 * var(--cu)); font-size: calc(34 * var(--cu)); }
+.hud .reroll { width: calc(150 * var(--cu)); display: grid; place-items: center; }
+.hud .reroll:disabled { filter: grayscale(0.45) brightness(0.8); cursor: default; transform: none; }
+.choose-tag { position: absolute; display: flex; align-items: center; gap: calc(4 * var(--cu)); font-size: calc(30 * var(--cu)); line-height: 1; }
+.choose-tag.free { left: calc(26 * var(--cu)); top: calc(-24 * var(--cu)); color: #8fa0ff; }
+.choose-tag.gem { left: calc(-44 * var(--cu)); top: calc(-28 * var(--cu)); }
+.reroll-gem { width: calc(56 * var(--cu)); height: calc(52 * var(--cu)); }
+.reroll-icon { width: calc(56 * var(--cu)); height: calc(56 * var(--cu)); }
+.reroll-label { position: absolute; bottom: calc(-30 * var(--cu)); left: 50%; transform: translateX(-50%); font-size: calc(36 * var(--cu)); }
+
+/* ---- Duel: aiming --------------------------------------------------------------------------------- */
+.aim-title {
+  position: absolute; top: calc(12 * var(--u)); left: 50%; transform: translateX(-50%); margin: 0; white-space: nowrap;
+  font-weight: 400; font-size: calc(54 * var(--u)); letter-spacing: -0.03em; -webkit-text-stroke: calc(7 * var(--u)) var(--ink);
+}
+.aim-hint {
+  position: absolute; top: calc(90 * var(--u)); left: 50%; transform: translateX(-50%); white-space: nowrap;
+  font: 700 calc(20 * var(--u)) var(--body); letter-spacing: 0; -webkit-text-stroke: calc(3.5 * var(--u)) var(--ink);
+}
+.duel-wait.aim-wait { top: calc(90 * var(--u)); --cu: var(--u); }
+.aim-dock { position: absolute; left: 50%; bottom: 17vh; transform: translateX(-50%); }
+.hud .lock-aim {
+  width: calc(330 * var(--u)); height: calc(76 * var(--u)); font-size: calc(46 * var(--u));
+  background: linear-gradient(#ffc61f, #f6a200 60%, #e08800); border: calc(3 * var(--u)) solid #3a2600;
+  -webkit-text-stroke: calc(6 * var(--u)) var(--ink);
+}
+.hud .lock-aim:disabled { background: linear-gradient(#8f949e, #6b707a); cursor: default; transform: none; }
+
+/* ---- Duel: FIGHT! and the result -------------------------------------------------------------------- */
+.fight-banner {
+  position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); white-space: nowrap;
+  font-size: calc(120 * var(--u)); color: #ffd23a; -webkit-text-stroke: calc(12 * var(--u)) var(--ink);
+  text-shadow: 0 calc(8 * var(--u)) 0 var(--ink); animation: banner-pop 1.35s ease-out both;
+}
+@keyframes banner-pop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  18% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  32% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.06); opacity: 0; }
+}
+.duel-result {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center;
+  gap: calc(8 * var(--u)); animation: result-in 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+@keyframes result-in { from { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } }
+.duel-result-title { font-size: calc(108 * var(--u)); -webkit-text-stroke: calc(12 * var(--u)) var(--ink); text-shadow: 0 calc(8 * var(--u)) 0 var(--ink); }
+.duel-result.won .duel-result-title { color: #ffd23a; }
+.duel-result.lost .duel-result-title { color: #ff3b3b; }
+.duel-result-sub { font-size: calc(28 * var(--u)); -webkit-text-stroke: calc(5 * var(--u)) var(--ink); }
+.duel-result-reward { display: flex; align-items: center; gap: calc(10 * var(--u)); font-size: calc(56 * var(--u)); color: #ffbf1c; -webkit-text-stroke: calc(7 * var(--u)) var(--ink); }
+.duel-result-coin { width: calc(64 * var(--u)); height: calc(64 * var(--u)); }
+@media (prefers-reduced-motion: reduce) {
+  .badge, .badge-heart, .badge-ball-name, .hud .ball-card, .fight-banner, .duel-result, .duel-dim { animation: none; }
+}

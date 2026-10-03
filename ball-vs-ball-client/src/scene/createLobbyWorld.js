@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { CAMERA } from '../config/layout.js';
+import { CAMERA, SPAWN } from '../config/layout.js';
+import { getAvatarSpec } from '../bloxity/sdk.js';
+import { readMove, startPlayerInput, stopPlayerInput } from '../controls/playerInput.js';
+import { createLegionCharacter } from '../objects/player/LegionCharacter.js';
+import { createDuelDirector } from './duel/duelDirector.js';
+import { createHeadshot } from './headshot.js';
 import { QUALITY } from '../config/graphics.js';
 import { SKY } from '../config/palette.js';
 import { createCameraControls } from '../controls/cameraControls.js';
@@ -11,13 +16,16 @@ import { buildLobby } from './buildLobby.js';
 import { createLighting, setShadowResolution } from './lighting.js';
 
 const COUNTDOWN_REFRESH_MS = 30_000;
+const WALK_SPEED = 26; // world units per second
+const CHARACTER_RADIUS = 1.3;
+const EYE_HEIGHT = 4.2; // the camera orbits this far above the character's feet
 
 /**
  * The 3D lobby on `canvas`. Only the sea moves, so while the camera is still the picture is redrawn just often
  * enough for the water (the quality's waterFps); camera moves, new data and resizes draw at once. That keeps
  * phones cool and batteries full.
  */
-export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
+export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () => {}, onProfile = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
@@ -39,9 +47,30 @@ export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
   scene.add(lobby.root);
   scene.environment = bakeSkyReflections(renderer, scene, [sea, lobby.root]);
 
+  // The player's Legion character, spawned in the middle of the hub.
+  const character = createLegionCharacter(getAvatarSpec());
+  // Debug: ?spawn=x,z starts the character somewhere else (e.g. on an arena square, for screenshots).
+  const spawnParam = new URLSearchParams(window.location.search).get('spawn')?.split(',').map(Number);
+  const spawn = spawnParam?.length === 2 && spawnParam.every(Number.isFinite) ? spawnParam : SPAWN.position;
+  character.group.position.set(spawn[0], lobby.walkArea.groundAt(...spawn), spawn[1]);
+  character.group.rotation.y = SPAWN.facing;
+  scene.add(character.group);
+  const headshot = createHeadshot(renderer, scene, character);
+  character.ready.then(() => {
+    character.update(0, 0);
+    headshot.capture();
+    needsRender = true;
+  });
+
   // Debug: ?cam=x,y,z,targetX,targetY,targetZ opens on a chosen view (handy for screenshots).
   const cam = new URLSearchParams(window.location.search).get('cam')?.split(',').map(Number);
+  // Debug: ?show=seconds freezes the limited shop's show at that moment of its loop (for screenshots).
+  const showParam = Number.parseFloat(new URLSearchParams(window.location.search).get('show'));
+  const frozenShow = Number.isFinite(showParam) ? showParam : null;
   const controls = createCameraControls(camera, canvas, cam?.length === 6 && cam.every(Number.isFinite) ? cam : null);
+  const duel = createDuelDirector({
+    scene, camera, canvas, renderer, arenas: lobby.arenas, character, headshot, controls, onChange: onDuelChange, onProfile,
+  });
   let settings = QUALITY[quality] ?? QUALITY.High;
   let composer = null;
   let needsRender = true;
@@ -75,16 +104,55 @@ export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
   let frame = 0;
   let last = performance.now();
   let lastDraw = 0;
+  const forward = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const step = new THREE.Vector3();
+  const eye = new THREE.Vector3();
+  /** Walks the character from the input; true while it moves. */
+  const moveCharacter = (dt) => {
+    // On a duel square the character stands still (the duel uses the same keys to aim).
+    const input = duel.seated ? { x: 0, y: 0 } : readMove();
+    const speed = Math.min(1, Math.hypot(input.x, input.y));
+    const position = character.group.position;
+    if (speed > 0.01) {
+      camera.getWorldDirection(forward).setY(0).normalize();
+      right.crossVectors(forward, camera.up).normalize();
+      step.set(0, 0, 0).addScaledVector(right, input.x).addScaledVector(forward, input.y).multiplyScalar(WALK_SPEED * dt);
+      lobby.walkArea.move(position, step.x, step.z, CHARACTER_RADIUS);
+      // Turn smoothly to face the way it walks (the model faces +Z).
+      const want = Math.atan2(step.x, step.z);
+      const diff = Math.atan2(Math.sin(want - character.group.rotation.y), Math.cos(want - character.group.rotation.y));
+      character.group.rotation.y += diff * Math.min(1, dt * 12);
+    }
+    // Step up onto (and down off) the arena bases smoothly.
+    const ground = lobby.walkArea.groundAt(position.x, position.z);
+    position.y += (ground - position.y) * Math.min(1, dt * 14);
+    const settling = Math.abs(ground - position.y) > 0.01;
+    character.update(dt, duel.seated ? 0 : speed);
+    controls.follow(eye.copy(position).setY(position.y + EYE_HEIGHT));
+    return speed > 0.01 || settling;
+  };
+  const frustum = new THREE.Frustum();
+  const viewProjection = new THREE.Matrix4();
   const loop = (time) => {
     frame = requestAnimationFrame(loop);
     const dt = Math.min(0.1, (time - last) / 1000);
     last = time;
+    if (moveCharacter(dt)) needsRender = true;
+    if (lobby.updateArenas(dt)) needsRender = true;
+    if (duel.update(dt, time / 1000)) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
-    if (!needsRender && !waterDue) return;
+    // The shop's show plays at animFps, but only while it is on screen; off screen it costs nothing.
+    camera.updateMatrixWorld();
+    viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(viewProjection);
+    const showDue = frustum.intersectsSphere(lobby.animatedBounds) && time - lastDraw >= 1000 / settings.animFps - 2;
+    if (!needsRender && !waterDue && !showDue) return;
     needsRender = false;
     lastDraw = time;
     if (settings.waterFps > 0) sea.userData.update(time / 1000);
+    lobby.animate(frozenShow ?? time / 1000);
     if (settings.bloom && composer) composer.render(dt);
     else renderer.render(scene, camera);
   };
@@ -93,6 +161,8 @@ export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
   let countdownTimer = 0;
   const start = () => {
     observer.observe(canvas);
+    startPlayerInput();
+    duel.start();
     setQuality(quality);
     countdownTimer = setInterval(() => { lobby.apply(null); requestRender(); }, COUNTDOWN_REFRESH_MS);
     frame = requestAnimationFrame(loop);
@@ -105,6 +175,8 @@ export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
 
   const dispose = () => {
     cancelAnimationFrame(frame);
+    stopPlayerInput();
+    duel.dispose();
     clearInterval(countdownTimer);
     observer.disconnect();
     controls.dispose();
@@ -112,5 +184,5 @@ export function createLobbyWorld(canvas, { quality = 'High' } = {}) {
     renderer.dispose();
   };
 
-  return { start, applyLobby, setQuality, dispose };
+  return { start, applyLobby, setQuality, duel: duel.actions, dispose };
 }

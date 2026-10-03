@@ -32,3 +32,41 @@ export const gameplayEnd = () => sdk()?.game?.gameplayEnd?.();
 /** Calls `listener(value)` now and whenever the player changes `key` in the portal menu; returns the unsubscribe. */
 export const listenSetting = (key, listener) => sdk()?.settings?.listen?.(key, listener) ?? noop;
 export const applyAllSettings = () => sdk()?.settings?.triggerAll?.();
+
+// ---- Avatar and friends ------------------------------------------------------------------------------
+/**
+ * The player's Legion avatar as the SDK describes it: { equipped (item ids by slot), proportions, skinUrl (the
+ * skin texture with face, shirt and trousers drawn on) }. Without the SDK, the default avatar.
+ */
+export function getAvatarSpec() {
+  const avatar = sdk()?.avatar;
+  try {
+    if (avatar) return { equipped: avatar.getEquipped?.() ?? {}, proportions: avatar.getProportions?.() ?? {}, skinUrl: avatar.getSkinTextureUrl?.() };
+  } catch {
+    // Fall through to the default avatar.
+  }
+  return { equipped: {}, proportions: {} };
+}
+export const onAvatarChanged = (listener) => sdk()?.avatar?.onAvatarChanged?.(listener) ?? noop;
+
+/** The name shown over the player in a duel: their Bloxity display name or username, else the guest name. */
+export function getPlayerName() {
+  try {
+    const user = sdk()?.auth?.getUser?.();
+    const guest = user ? null : sdk()?.auth?.getGuest?.();
+    const name = user?.displayName || user?.username || guest?.username;
+    if (name) return String(name);
+  } catch {
+    // Fall through to a made-up guest name.
+  }
+  return `Guest${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+/** A link friends can open to come and play (the portal's invite link when embedded, else this page). */
+export function getInviteLink() {
+  try {
+    return sdk()?.social?.getInviteFriendsLink?.() || window.location.href;
+  } catch {
+    return window.location.href;
+  }
+}
