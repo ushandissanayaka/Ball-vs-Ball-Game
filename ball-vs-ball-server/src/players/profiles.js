@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { STARTER_PROFILE } from '../shared/lobbySeed.js';
 import { getProfile, setProfile } from '../progress/profileStore.js';
 import { questStates, refreshDailyQuests } from '../progress/quests.js';
+import { STARTER_BALLS, ensureInventory, newDailyState, publicDaily, refreshDaily } from '../shared/rewards.js';
 
 const GUEST_ID = /^[a-zA-Z0-9-]{8,64}$/;
 
@@ -20,6 +21,8 @@ function newProfile(now) {
     coinBoost: starterBoost(now),
     questDay: null,
     questProgress: { ...STARTER_PROFILE.questProgress },
+    balls: { ...STARTER_BALLS },
+    daily: newDailyState(now),
   };
 }
 
@@ -32,7 +35,7 @@ export function getOrCreateProfile(requestedId, now) {
   const guestId = saved ? requestedId : randomUUID();
   const current = saved?.version === STARTER_PROFILE.version;
   const profile = current ? saved : newProfile(now);
-  const changed = refreshDailyQuests(profile, now);
+  const changed = [refreshDailyQuests(profile, now), ensureInventory(profile, now), refreshDaily(profile, now)].some(Boolean);
   if (!current || changed) setProfile(guestId, profile);
   return { guestId, profile };
 }
@@ -40,5 +43,9 @@ export function getOrCreateProfile(requestedId, now) {
 /** @returns {import('../shared/types.js').PublicProfile} */
 export function publicProfile(profile, now) {
   const boost = profile.coinBoost && profile.coinBoost.endsAt > now ? profile.coinBoost : null;
-  return { coins: profile.coins, gems: profile.gems, level: profile.level, coinBoost: boost, ...questStates(profile, now) };
+  return {
+    coins: profile.coins, gems: profile.gems, level: profile.level, coinBoost: boost, ...questStates(profile, now),
+    balls: { ...profile.balls }, explosions: { ...profile.explosions }, flyers: { ...profile.flyers }, variants: { ...profile.variants },
+    daily: publicDaily(profile.daily, now), gemsDay: profile.gemsDay ?? null,
+  };
 }

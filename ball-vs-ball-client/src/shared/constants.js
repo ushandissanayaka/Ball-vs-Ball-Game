@@ -15,6 +15,11 @@ export const ROUTES = {
   duelChoose: '/api/duel/choose',
   duelAim: '/api/duel/aim',
   duelReroll: '/api/duel/reroll',
+  dailyClaim: '/api/daily/claim',
+  storeBuy: '/api/store/buy',
+  crateOpen: '/api/crate/open',
+  dailyGems: '/api/gems/daily',
+  fuse: '/api/fuse',
 };
 
 /** 1v1 duel arenas along the runway: `arenasPerSide` on the west (W) and east (E) platforms. */

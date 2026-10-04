@@ -1,5 +1,6 @@
 import { ROUTES, arenaIds, DUEL, nextLimitedOfferEnd, nextWeeklyReset, LIMITED_OFFER, DAILY_QUESTS, nextDailyReset } from '../shared/constants.js';
 import { SEED_ARENA_PLAYERS, SEED_LEADERBOARDS, STARTER_PROFILE } from '../shared/lobbySeed.js';
+import { STARTER_BALLS, buyStoreItem, claimDailyGems, claimDailyReward, fuseItem, newDailyState, openCrate as openCrateLocally, publicDaily, refreshDaily } from '../shared/rewards.js';
 
 // Talks to the game server (Render). Every call falls back to the shared sample data, so the lobby still looks
 // complete when the server is asleep or unreachable.
@@ -22,7 +23,10 @@ async function request(path, options = {}) {
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...options.headers },
     });
-    if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status, reason: body?.error });
+    }
     return await response.json();
   } finally {
     clearTimeout(timer);
@@ -54,7 +58,22 @@ export function offlineProfile(now = Date.now()) {
       return { ...quest, progress, done: progress >= quest.goal };
     }),
     questsResetAt: nextDailyReset(now),
+    balls: { ...STARTER_BALLS },
+    explosions: {},
+    flyers: {},
+    variants: {},
+    daily: publicDaily(newDailyState(now), now),
+    gemsDay: null,
   };
+}
+
+/** Applies a daily claim or a purchase to the client's own copy of the profile (when the server can't be reached). */
+function applyOffline(profile, change, now = Date.now()) {
+  const next = { ...profile, daily: { ...profile.daily } };
+  refreshDaily(next, now);
+  const result = change(next, now);
+  const error = typeof result === 'string' ? result : result?.error;
+  return error ? { error } : { ...(result ?? {}), profile: { ...next, daily: publicDaily(next.daily, now) } };
 }
 
 export async function fetchLobby() {
@@ -162,3 +181,22 @@ const duelAction = async (route, body) => {
 export const duelChoose = (ball) => duelAction(ROUTES.duelChoose, { ball });
 export const duelAim = (x, y) => duelAction(ROUTES.duelAim, { x, y });
 export const duelReroll = () => duelAction(ROUTES.duelReroll, {});
+
+/**
+ * Claims a daily reward or Daily Diamonds, buys a coin-priced store item, or opens a crate. Each resolves to
+ * { profile } (opening a crate adds `prizes`) or { error }. Offline, `profile` (the current one) is changed
+ * locally by the same rules.
+ */
+async function shopAction(route, body, profile, change) {
+  try {
+    return await withSession(route, body);
+  } catch (error) {
+    if (error.status) return { error: error.reason ?? 'refused' };
+    return applyOffline(profile, change);
+  }
+}
+export const claimDaily = (day, profile) => shopAction(ROUTES.dailyClaim, { day }, profile, (next, now) => claimDailyReward(next, day, now));
+export const buyItem = (item, profile) => shopAction(ROUTES.storeBuy, { item }, profile, (next) => buyStoreItem(next, item));
+export const openCrate = (crate, count, profile) => shopAction(ROUTES.crateOpen, { crate, count }, profile, (next) => openCrateLocally(next, crate, count));
+export const claimGems = (profile) => shopAction(ROUTES.dailyGems, {}, profile, (next, now) => claimDailyGems(next, now));
+export const fuse = (kind, id, mode, profile) => shopAction(ROUTES.fuse, { kind, id, mode }, profile, (next) => fuseItem(next, kind, id, mode));

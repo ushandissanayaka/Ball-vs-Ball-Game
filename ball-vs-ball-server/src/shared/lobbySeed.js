@@ -36,3 +36,19 @@ export const STARTER_PROFILE = {
   coinBoost: null, // { multiplier, durationSec } to start new guests with a boost
   questProgress: { duel_friend: 0, win_3: 0, play_10: 0 },
 };
+
+/** Players listed on the Trade tab: { name, level, streak } (streak: win streak shown with a flame, 0 for none). */
+export const SEED_TRADE_PLAYERS = [
+  { name: 'OP_GAMER123', level: 23, streak: 0 },
+  { name: 'PlainNoodle', level: 17, streak: 3 },
+  { name: 'Someone2008418', level: 15, streak: 4 },
+  { name: 'Ellomate', level: 14, streak: 0 },
+  { name: 'Dhruvlovesmamacity', level: 12, streak: 0 },
+  { name: 'Cute', level: 11, streak: 4 },
+  { name: 'TurkeyHeadB', level: 10, streak: 0 },
+  { name: 'Btrot109', level: 7, streak: 1 },
+  { name: 'Jadoujaja3', level: 6, streak: 0 },
+  { name: 'shandp99', level: 6, streak: 0 },
+  { name: 'ducky', level: 5, streak: 0 },
+  { name: 'MKrakken67', level: 4, streak: 3 },
+];

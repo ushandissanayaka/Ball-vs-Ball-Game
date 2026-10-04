@@ -13,6 +13,7 @@ import { SKY } from '../config/palette.js';
 import { createCameraControls } from '../controls/cameraControls.js';
 import { createBloomComposer } from '../effects/postprocessing.js';
 import { createClouds } from '../objects/environment/Clouds.js';
+import { createBallThumbs } from './ballThumbs.js';
 import { createSea } from '../objects/environment/Sea.js';
 import { bakeSkyReflections, createSky } from '../objects/environment/Sky.js';
 import { buildLobby } from './buildLobby.js';
@@ -216,7 +217,19 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     requestRender();
   };
 
+  /** Renders each ball of `kinds` to a picture for the HUD, one at a time between frames: onEach(kind, url). */
+  let thumbs = null;
+  const renderBallThumbs = async (kinds, onEach) => {
+    thumbs ??= createBallThumbs(renderer, scene.environment);
+    for (const kind of kinds) {
+      if (!thumbs) return; // disposed meanwhile
+      onEach(kind, await thumbs.render(kind));
+    }
+  };
+
   const dispose = () => {
+    thumbs?.dispose();
+    thumbs = null;
     cancelAnimationFrame(frame);
     stopPlayerInput();
     duel.dispose();
@@ -228,5 +241,5 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     renderer.dispose();
   };
 
-  return { start, applyLobby, setQuality, duel: duel.actions, dispose };
+  return { start, applyLobby, setQuality, renderBallThumbs, duel: duel.actions, dispose };
 }

@@ -26,6 +26,13 @@
  * @property {{ multiplier: number, endsAt: number } | null} coinBoost
  * @property {QuestState[]} quests
  * @property {number} questsResetAt
+ * @property {Record<string, number>} balls   inventory: ball (a key of CATALOG in shared/catalog.js) → how many
+ * @property {Record<string, number>} explosions   the same for EXPLOSIONS
+ * @property {Record<string, number>} flyers   the same for FLYERS
+ * @property {Record<string, { shiny: number, rainbow: number }>} variants   by 'kind:id' (see fuseItem in shared/rewards.js)
+ * @property {string | null} gemsDay   UTC day Daily Diamonds were last claimed
+ * @property {{ start: string, claimed: number[], lastClaimDay: string | null, unlocked: number, nextUnlockAt: number }} daily
+ *                                            the 7-day reward track (see shared/rewards.js)
  *
  * @typedef {Object} DuelPlayer   one side of a duel, as `viewFor` (shared/duelMatch.js) shows it
  * @property {string} name
