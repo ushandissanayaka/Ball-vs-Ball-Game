@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { getAvatarSpec, getPlayerName } from '../../bloxity/sdk.js';
-import { ARENA_BASE } from '../../config/layout.js';
+import { arenaBase } from '../../config/layout.js';
 import { readMove } from '../../controls/playerInput.js';
 import { createSmokeBurst } from '../../effects/duelFx.js';
 import { arenaState, duelAim, duelChoose, duelReroll, joinArena, leaveArena } from '../../net/api.js';
 import { createFightView } from '../../objects/duel/fightView.js';
 import { createHeartsSprite } from '../../objects/duel/heartsSprite.js';
-import { createLegionCharacter } from '../../objects/player/LegionCharacter.js';
+import { createLegionCharacter, disposeCharacter } from '../../objects/player/LegionCharacter.js';
 import { SIDES } from '../../objects/props/DuelArena.js';
 import { DUEL } from '../../shared/constants.js';
 import { DUEL_TIMING, otherSide } from '../../shared/duelMatch.js';
@@ -21,6 +21,8 @@ const FLIGHT = { start: 350, impact: 1350 };
 // The camera turns toward the loser for the hit, holds, and turns back (ms after the fight ends).
 const PAN = { in: 250, full: 900, hold: 2900, out: 3800 };
 const OPEN_PHASES = new Set(['choose', 'aim', 'fight', 'over']);
+const HEART_LIFT = new THREE.Vector3(0, 1.9, 0); // hearts float this far over a duelling player's head
+const PROMPT_LIFT = 3.2; // the Join prompt floats this far over the character's head
 const FORCE_BOT = new URLSearchParams(window.location.search).has('bot');
 
 const remoteHost = {
@@ -33,18 +35,10 @@ const remoteHost = {
 };
 
 const smooth = (t) => t * t * (3 - 2 * t);
+/** `from` turned toward `to` by `t` (radians, the short way round). */
+const turnToward = (from, to, t) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
 const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const easeOutBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
-
-function disposeCharacter(character) {
-  character.group.removeFromParent();
-  character.group.traverse((object) => {
-    if (!object.isMesh) return;
-    object.geometry.dispose();
-    object.material.map?.dispose();
-    object.material.dispose();
-  });
-}
 
 /**
  * The 1v1 duel, from the player's side. In the lobby it watches for the character standing on an arena square
@@ -61,7 +55,7 @@ function disposeCharacter(character) {
  * `onChange(hud)` tells the HUD what to show (see `hudState`); `onProfile(profile)` passes on coin and gem
  * changes. `update(dt, seconds)` runs it all each frame and returns true while it needs drawing.
  */
-export function createDuelDirector({ scene, camera, canvas, renderer, arenas, character, headshot, controls, onChange, onProfile }) {
+export function createDuelDirector({ scene, camera, canvas, renderer, arenas, character, headshot, controls, onChange, onProfile, onLeave = () => {} }) {
   const smoke = createSmokeBurst(scene);
   const fightViews = new Map();
   const fightViewOf = (arenaId, arena) => {
@@ -88,27 +82,29 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
   let aim = { x: 1, y: 0 };
   let strike = { key: null, flight: null, impacted: false };
   let lastHudKey = '';
+  let seatWalk = 0; // the player's walk cycle while stepping out beside the grown box (0 standing)
   let occupantsKey = '';
 
   const serverNow = () => Date.now() + clockOffset;
   const flashNote = (text) => { note = { text, until: performance.now() + 2600 }; };
 
   // ---- Lobby: the "E Join" prompt --------------------------------------------------------------------
+  // It shows anywhere on a duel arena's stage, over the character's head (so it is always on screen), and joins
+  // the square the character stands on, or else the nearer one (the server hands over the other if it's taken).
   const anchor = new THREE.Vector3();
   const updatePrompt = () => {
     prompt = null;
+    const position = character.group.position;
     for (const [arenaId, arena] of arenas) {
-      if (arena.mode !== 'pads') continue;
-      const spot = arena.spotAt(character.group.position);
-      if (spot) {
-        prompt = { arenaId, spot, arena };
-        break;
-      }
+      // A full arena (two players waiting or duelling there) has no square to join.
+      if (arena.mode !== 'pads' || !arena.onStage(position) || arena.isFull()) continue;
+      prompt = { arenaId, spot: arena.spotAt(position) ?? arena.nearestSpot(position), arena };
+      break;
     }
     promptScreen = null;
     if (!prompt) return;
-    prompt.arena.spotPose(prompt.spot, anchor);
-    anchor.y += 7.4;
+    character.headPosition(anchor);
+    anchor.y += PROMPT_LIFT;
     anchor.project(camera);
     if (anchor.z > 1) return;
     promptScreen = {
@@ -123,6 +119,13 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     return { skinUrl: spec.skinUrl, skinId: spec.equipped?.skinId };
   };
 
+  /** My picture for the board (a texture, straight away) and the HUD (a bitmap, read back without a stall). */
+  function takeMyPicture(mySeat) {
+    myPicture = null;
+    headshot.capture();
+    headshot.toImage().then((picture) => { if (seat === mySeat) myPicture = picture; });
+  }
+
   async function join(arenaId, spot) {
     if (seat) return;
     const arena = arenas.get(arenaId);
@@ -134,8 +137,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     // Stand on the square, facing the lane, and take the picture for the board.
     character.group.rotation.y = arena.spotPose(spot, character.group.position);
     character.update(0, 0);
-    headshot.capture();
-    myPicture = headshot.toDataURL();
+    takeMyPicture(mySeat);
     arena.setLabelVisible(false);
     occupantsKey = '';
     clockSynced = false;
@@ -156,6 +158,13 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
         release({ tellServer: false });
         flashNote('Someone is duelling here');
         return;
+      }
+      // The square asked for was taken: the server gave this player the other one.
+      if (result.online && result.spot && result.spot !== spot) {
+        mySeat.spot = result.spot;
+        character.group.rotation.y = arena.spotPose(result.spot, character.group.position);
+        character.update(0, 0);
+        takeMyPicture(mySeat);
       }
       host = result.online ? remoteHost : createLocalDuel({ spot, player });
       if (result.online) applyState({ serverTime: result.serverTime, seated: true, arena: result.arena, duel: result.duel }, t0, Date.now());
@@ -205,7 +214,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
 
   function release({ tellServer }) {
     if (!seat) return;
-    const { arena, host, spot, fightView } = seat;
+    const { arena, arenaId, host, spot, fightView } = seat;
     clearTimeout(pollTimer);
     seat = null;
     view = null;
@@ -220,12 +229,15 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     arena.setLabelVisible(true);
     removeOpponent();
     myHearts.group.visible = false;
+    arena.setExpanded(false);
+    seatWalk = 0;
     // Step off the square, toward the lane, and hand the camera back.
-    const off = arena.group.localToWorld(new THREE.Vector3(-ARENA_BASE[0] / 2 - 3, 0, SIDES[spot].z));
+    const off = arena.group.localToWorld(new THREE.Vector3(-arenaBase('pads')[0] / 2 - 3, 0, SIDES[spot].z));
     character.group.position.x = off.x;
     character.group.position.z = off.z;
     controls.clearCinematic(character.group.position.clone().setY(character.group.position.y + 4.2));
     pushHud(true);
+    onLeave(arenaId);
   }
 
   // ---- The opponent's character ------------------------------------------------------------------------
@@ -252,8 +264,8 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
       mine.headshot.capture();
       body.group.scale.setScalar(scale);
       mine.texture = mine.headshot.texture;
-      mine.picture = mine.headshot.toDataURL();
       occupantsKey = '';
+      mine.headshot.toImage().then((picture) => { if (opponent === mine) mine.picture = picture; });
     });
   }
 
@@ -372,25 +384,55 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     controls.setCinematic(camPosition, camTarget);
   }
 
+  // Once both are in (as the spotlights shoot up), the box grows and both players walk out to stand beside it.
+  const walkFrom = new THREE.Vector3();
+  const walkTo = new THREE.Vector3();
+  function placePlayers() {
+    const { arena, spot } = seat;
+    const walking = arena.expanding();
+    seatWalk = walking ? 1 : 0;
+    for (const [side, body] of [[spot, character], [otherSide(spot), opponent?.character]]) {
+      if (!body) continue;
+      const yaw = arena.spotPose(side, body.group.position);
+      if (!walking) {
+        body.group.rotation.y = yaw;
+        continue;
+      }
+      // Face the way they walk, then turn back to the lane as they arrive.
+      arena.spotPose(side, walkFrom, 0);
+      arena.spotPose(side, walkTo, 1);
+      const away = Math.atan2(walkTo.x - walkFrom.x, walkTo.z - walkFrom.z);
+      body.group.rotation.y = turnToward(yaw, away, Math.min(1, Math.sin(Math.PI * arena.expansion()) * 1.8));
+    }
+  }
+
   function stage(dt, time) {
     const now = serverNow();
     const { arena, fightView, spot } = seat;
     const phase = view?.phase ?? 'waiting';
 
-    const key = `${Boolean(opponent)}:${Boolean(opponent?.texture)}`;
+    const opponentName = opponent ? view?.players[opponent.side].name ?? null : null;
+    const key = `${Boolean(opponent)}:${Boolean(opponent?.texture)}:${opponentName}`;
     if (key !== occupantsKey) {
       occupantsKey = key;
-      arena.setOccupants({ [spot]: headshot.texture, [otherSide(spot)]: opponent ? (opponent.texture ?? true) : false });
+      arena.setOccupants(
+        { [spot]: headshot.texture, [otherSide(spot)]: opponent ? (opponent.texture ?? true) : false },
+        { [spot]: seat.name, [otherSide(spot)]: opponentName },
+      );
     }
 
+    let launched = OPEN_PHASES.has(phase);
     if (phase === 'intro') {
       const left = view.phaseEndsAt - now;
       arena.setCountdown(left > 1000 ? Math.min(3, Math.ceil((left - 1000) / 1000)) : null);
-      if (left < 1000) arena.launchBeams();
+      launched = left < 1000;
     } else {
       arena.setCountdown(null);
-      if (!view) arena.resetBeams();
     }
+    if (launched) arena.launchBeams();
+    else if (!view) arena.resetBeams();
+    arena.setExpanded(launched);
+    placePlayers();
     arena.setScreenOpen(OPEN_PHASES.has(phase));
 
     if (phase === 'aim') {
@@ -421,16 +463,16 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     if (duelOn) {
       myHearts.setCount(heartsOf(spot));
       character.headPosition(head);
-      myHearts.group.position.copy(head).add(new THREE.Vector3(0, 1.9, 0));
+      myHearts.group.position.copy(head).add(HEART_LIFT);
       myHearts.update(dt);
     }
     if (opponent) {
       opponent.appear = Math.min(1, opponent.appear + dt / 0.45);
       opponent.character.group.scale.setScalar(Math.max(0.001, easeOutBack(opponent.appear)));
-      opponent.character.update(dt, 0);
+      opponent.character.update(dt, seatWalk);
       opponent.hearts.setCount(heartsOf(opponent.side));
       opponent.character.headPosition(head);
-      opponent.hearts.group.position.copy(head).add(new THREE.Vector3(0, 1.9, 0));
+      opponent.hearts.group.position.copy(head).add(HEART_LIFT);
       opponent.hearts.update(dt);
     }
     stageCamera(now);
@@ -540,5 +582,5 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     window.removeEventListener('pointercancel', onPointerUp);
   };
 
-  return { start, update, dispose, actions, get seated() { return Boolean(seat); } };
+  return { start, update, dispose, actions, get seated() { return Boolean(seat); }, get seatArenaId() { return seat?.arenaId ?? null; }, get seatWalk() { return seatWalk; } };
 }

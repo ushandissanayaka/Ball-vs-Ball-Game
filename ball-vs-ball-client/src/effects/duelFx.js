@@ -82,8 +82,9 @@ export function createFightFx(layer) {
   const spawnNumber = (text, fill, x, y, z) => {
     const item = take(numbers);
     const entry = numberTexture(text, fill, '#1a0505');
+    // Only the first texture changes the shader (it then has a map); swapping textures after that is free.
+    if (!item.sprite.material.map) item.sprite.material.needsUpdate = true;
     item.sprite.material.map = entry.texture;
-    item.sprite.material.needsUpdate = true;
     item.data = { x: x + (Math.random() - 0.5) * 6, y, z, aspect: entry.aspect };
     item.age = 0;
     item.life = 0.95;

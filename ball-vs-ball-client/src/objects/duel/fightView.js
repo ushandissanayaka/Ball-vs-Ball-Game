@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { BALLS } from '../../shared/balls.js';
 import { START, createFight } from '../../shared/duelSim.js';
 import { createFightFx } from '../../effects/duelFx.js';
+import { dotTexture } from '../../effects/glowTextures.js';
 import { createBallModel, createTailSegment } from './ballModels.js';
 
 const MAX_CATCH_UP = 900; // ticks per frame at most, when a fight is joined late or the tab was hidden
 
 /** The dashed white arrow showing which way the player's ball will start. */
-function createAimArrow() {
+export function createAimArrow() {
   const group = new THREE.Group();
   const material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, toneMapped: false });
   const parts = [];
@@ -25,9 +26,38 @@ function createAimArrow() {
   tip.geometry.translate(0, 0, -0.6);
   tip.position.x = 28.4;
   parts.push(tip);
-  group.add(...parts);
+  // The dashes and head sit on `inner`, slid out to start at the edge of the ball (see `startAt`).
+  const inner = new THREE.Group();
+  inner.add(...parts);
+  group.add(inner);
   group.renderOrder = 11;
-  return { group, material };
+  return { group, material, startAt: (radius) => { inner.position.x = radius - 3.5; } };
+}
+
+/** A Verity Ball's orb: a hot white core in an orange glow. */
+export function createOrb() {
+  const glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: dotTexture(), color: '#ff8a1a', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false,
+  }));
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: dotTexture(), color: '#ffffff', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false,
+  }));
+  glowSprite.renderOrder = 13;
+  core.renderOrder = 13;
+  const group = new THREE.Group();
+  group.add(glowSprite, core);
+  return {
+    group,
+    pulse(time, r) {
+      glowSprite.scale.setScalar(r * (5.2 + Math.sin(time * 20) * 0.5));
+      core.scale.setScalar(r * 3.2);
+    },
+    dispose() {
+      group.removeFromParent();
+      glowSprite.material.dispose();
+      core.material.dispose();
+    },
+  };
 }
 
 /**
@@ -48,6 +78,8 @@ export function createFightView(arena) {
   const models = new Map(); // body id (or 'pink' / 'blue' while lined up) -> model
   const tails = new Map(); // snake body id -> tail segments
   const flown = new Set(); // bodies whose model has left the box (the striker)
+  const orbs = new Map(); // Verity orb id -> orb
+  const spareOrbs = []; // orbs that have hit something, kept to be used again (no new materials mid-fight)
   const arrow = createAimArrow();
   arrow.group.visible = false;
   layer.add(arrow.group);
@@ -68,8 +100,17 @@ export function createFightView(arena) {
     tails.delete(id);
   };
 
+  const dropOrb = (id) => {
+    const orb = orbs.get(id);
+    if (!orb) return;
+    orb.group.visible = false;
+    spareOrbs.push(orb);
+    orbs.delete(id);
+  };
+
   const clear = () => {
     for (const id of [...models.keys()]) dropModel(id);
+    for (const id of [...orbs.keys()]) dropOrb(id);
     fx.clear();
     flown.clear();
     fight = null;
@@ -96,7 +137,10 @@ export function createFightView(arena) {
     }
     const mine = models.get(side);
     arrow.group.visible = Boolean(mine);
-    if (mine) arrow.group.position.copy(mine.group.position);
+    if (mine) {
+      arrow.group.position.copy(mine.group.position);
+      arrow.startAt(BALLS[balls[side]].radius);
+    }
   };
 
   const setAim = ({ x, y }) => { arrow.group.rotation.z = Math.atan2(y, x); };
@@ -128,7 +172,7 @@ export function createFightView(arena) {
       place(model, body.x, body.y, body.r);
       model.setHp(body.hp);
       if (body.axe) model.setAxe(body.axe[0], body.axe[1]);
-      model.setState({ frozen: body.frozen > 0, burning: body.burn > 0, charge: body.charge / 13 });
+      model.setState({ frozen: body.frozen > 0, burning: body.burn > 0, charge: body.charge / 4, transformed: body.transform > 0 });
       model.userData = { vx: body.frozen > 0 ? 0 : body.vx, vy: body.frozen > 0 ? 0 : body.vy };
       if (body.tail) {
         const segments = tails.get(body.id);
@@ -145,6 +189,21 @@ export function createFightView(arena) {
         });
       }
     }
+    for (const orb of fight.orbs) {
+      if (!orb.alive) {
+        if (orbs.has(orb.id)) dropOrb(orb.id);
+        continue;
+      }
+      let shown = orbs.get(orb.id);
+      if (!shown) {
+        shown = spareOrbs.pop() ?? createOrb();
+        shown.group.visible = true;
+        if (!shown.group.parent) layer.add(shown.group);
+        orbs.set(orb.id, shown);
+      }
+      arena.simToLocal(orb.x, orb.y, orb.r, shown.group.position);
+      shown.r = orb.r;
+    }
   };
 
   const byId = (id) => fight.bodies.find((body) => body.id === id);
@@ -154,7 +213,9 @@ export function createFightView(arena) {
     const body = event.id ? byId(event.id) : null;
     switch (event.type) {
       case 'hit':
-        fx.spawnSparks(event.x, event.y, 10, '#ffffff', 12, 55);
+        // Harder crashes throw more sparks, further; the hardest add a shock ring.
+        fx.spawnSparks(event.x, event.y, 10, '#ffffff', Math.round(8 + event.power * 8), 40 + event.power * 30);
+        if (event.power > 1.25) fx.spawnRing(event.x, event.y, 10, '#ffffff', 18 + event.power * 10);
         models.get(event.a)?.flash();
         models.get(event.b)?.flash();
         break;
@@ -177,6 +238,16 @@ export function createFightView(arena) {
         break;
       case 'bite':
         fx.spawnSparks(event.x, event.y, 8, '#ffffff', 6, 35);
+        break;
+      case 'wall':
+        if (body && body.speed > body.base * 1.3) fx.spawnSparks(event.x, event.y, z(body), '#dbe8ff', 5, 30);
+        break;
+      case 'transform':
+        fx.spawnRing(event.x, event.y, 10, '#ffb020', 40);
+        fx.spawnSparks(event.x, event.y, 10, '#ffd36a', 22, 70);
+        break;
+      case 'orb':
+        fx.spawnSparks(event.x, event.y, 9, '#ff9a2a', 8, 40);
         break;
       case 'split':
         fx.spawnRing(event.x, event.y, 8, '#8cf07a', 28);
@@ -219,6 +290,7 @@ export function createFightView(arena) {
 
   const update = (dt, time) => {
     for (const model of models.values()) model.update(dt, time, model.userData?.vx ?? 0, model.userData?.vy ?? 0);
+    for (const orb of orbs.values()) orb.pulse(time, orb.r ?? 2);
     if (arrow.group.visible) {
       const pulse = 0.85 + Math.sin(time * 6) * 0.15;
       arrow.material.opacity = pulse;

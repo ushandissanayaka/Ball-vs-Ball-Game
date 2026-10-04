@@ -65,6 +65,18 @@ export async function fetchLobby() {
   }
 }
 
+/**
+ * Who stands on each arena: { serverTime, arenas: ArenaWatch[] } (see shared/types.js), or null when the server
+ * can't be reached.
+ */
+export async function fetchArenas() {
+  try {
+    return await request(ROUTES.arenas);
+  } catch {
+    return null;
+  }
+}
+
 /** Opens a guest session (remembering the guest id in this browser); falls back to the starter profile. */
 let sessionToken = null;
 

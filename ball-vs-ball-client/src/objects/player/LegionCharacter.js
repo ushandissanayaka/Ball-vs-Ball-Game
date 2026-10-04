@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { dotTexture } from '../../effects/glowTextures.js';
 
 /*
@@ -32,15 +33,26 @@ async function loadSkin(url) {
   return texture;
 }
 
+// The avatar body, downloaded and parsed once; every character wears a clone of it (opponents, players seen on
+// the arenas), so another player appearing costs no new parse.
+let avatarBody = null;
+const loadBody = () => {
+  avatarBody ??= new GLTFLoader().loadAsync(`${CDN}/player.glb`).catch((error) => {
+    avatarBody = null; // try again next time
+    throw error;
+  });
+  return avatarBody;
+};
+
 /** Bloxity's avatar body in the player's skin; `bones` by name. */
 async function loadAvatar(spec) {
   const skinId = spec?.equipped?.skinId;
   const skinUrl = trustedSkinUrl(spec?.skinUrl) ? spec.skinUrl : `${CDN}/skins/${equipped(skinId) ? skinId : '0'}.png`;
   const [gltf, skin] = await Promise.all([
-    new GLTFLoader().loadAsync(`${CDN}/player.glb`),
+    loadBody(),
     loadSkin(skinUrl).catch(() => loadSkin(`${CDN}/skins/0.png`)),
   ]);
-  const model = gltf.scene;
+  const model = cloneSkinned(gltf.scene);
   const material = new THREE.MeshStandardMaterial({ map: skin, roughness: 0.7, emissive: 0xffffff, emissiveMap: skin, emissiveIntensity: 0.25 });
   const bones = {};
   model.traverse((object) => {
@@ -76,6 +88,17 @@ function blockyAvatar() {
   };
   const bones = { ArmL1: limb(1.8, 4.8, skin), ArmR1: limb(-1.8, 4.8, skin), LegL1: limb(0.6, 2.4, pants), LegR1: limb(-0.6, 2.4, pants) };
   return { model, bones, blocky: true };
+}
+
+/** Takes a character out of the scene and frees what is its own (the avatar body and the shadow dot are shared). */
+export function disposeCharacter(character) {
+  character.group.removeFromParent();
+  character.group.traverse((object) => {
+    if (!object.isMesh) return;
+    if (!object.isSkinnedMesh) object.geometry.dispose();
+    if (object.material.map !== dotTexture()) object.material.map?.dispose();
+    object.material.dispose();
+  });
 }
 
 /**

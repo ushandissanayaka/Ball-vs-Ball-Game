@@ -22,7 +22,7 @@ function playerInfo(body) {
 /**
  * Standing on a duel arena's spot, and the duel that starts when both spots are taken. All take
  * { sessionToken } (from POST /api/session):
- *   POST /api/arena/join   { arenaId, spot: 'pink' | 'blue', name, avatar }  -> { arena, duel }  (409 if taken)
+ *   POST /api/arena/join   { arenaId, spot: 'pink' | 'blue', name, avatar }  -> { arena, spot, duel }  (409 if full)
  *   POST /api/arena/leave                                                    -> { arena | null }
  *   POST /api/arena/state  (poll while on a spot)          -> { serverTime, seated, spot, arena, duel, profile }
  *   POST /api/duel/choose  { ball }                                          -> { serverTime, duel }

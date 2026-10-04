@@ -23,11 +23,11 @@ export const RUNWAY = { startZ: 66, endZ: 340, laneHalf: 22, outerX: 62, tab: 14
 export const ARENA_ROWS = [100, 150, 200, 250, 300];
 export const ARENA_X = (RUNWAY.laneHalf + RUNWAY.outerX) / 2;
 /**
- * Arena base [width (x), depth (z)]. Pads arenas are deeper: their two players stand either side of the duel box,
- * level with it, as in the reference shots.
+ * Arena base [width (x), depth (z)]. Pads arenas are a little wider: the two squares sit side by side on the
+ * lane half and the duel box rises from the back half, as in the reference shots.
  */
 export const ARENA_BASE = [20, 22];
-export const PADS_ARENA_BASE = [20, 30];
+export const PADS_ARENA_BASE = [24, 26]; // deep enough for the players to stand beside the grown box
 /**
  * What stands on each arena, north to south: 'pads' (two player squares, the players label, hex gems) or
  * 'match' (the standing screen the balls fight on), mixed as in the reference shots.

@@ -6,7 +6,8 @@ export const BODY_FONT = '"Nunito", "Arial Black", Arial, sans-serif';
 /** Waits (at most 2.5 s) for the web fonts, so text painted into canvases uses them. */
 export function fontsReady() {
   if (!document.fonts?.load) return Promise.resolve();
-  const load = Promise.all([document.fonts.load('64px "Righteous"'), document.fonts.load('900 64px "Nunito"')]);
+  // Michroma: the duel screens' "VS", countdown and name plates.
+  const load = Promise.all(['64px "Righteous"', '900 64px "Nunito"', '64px "Michroma"'].map((font) => document.fonts.load(font)));
   return Promise.race([load, new Promise((resolve) => setTimeout(resolve, 2500))]).catch(() => {});
 }
 

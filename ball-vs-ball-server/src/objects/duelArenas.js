@@ -19,6 +19,21 @@ const arenas = new Map(arenaIds().map((id) => {
 
 const filled = (arena) => SPOTS.filter((spot) => arena.spots[spot]).length;
 const publicArena = (arena) => ({ id: arena.id, players: filled(arena), capacity: arena.capacity, reward: arena.reward });
+// The players' screens send the squares up into the spotlights a second before the countdown ends.
+const LAUNCH_BEFORE_MS = 1000;
+/**
+ * Who stands where, for everyone in the lobby to see: { pink, blue } each { name, avatar } or null, whether
+ * their duel is on (`live`), and when (server time) its squares fly up and the box grows (`launchAt`, so the
+ * lobby shows it at the same moment as the players). Only what an opponent is shown anyway.
+ */
+const occupantsOf = (arena) => ({
+  live: Boolean(arena.match),
+  launchAt: arena.match?.phase === 'intro' ? arena.match.phaseEndsAt - LAUNCH_BEFORE_MS : 0,
+  ...Object.fromEntries(SPOTS.map((spot) => {
+    const info = arena.guests[arena.spots[spot]];
+    return [spot, info ? { name: info.name, avatar: info.avatar } : null];
+  })),
+});
 const sideOf = (match, guestId) => SPOTS.find((side) => match.players[side].id === guestId) ?? null;
 
 function seatOf(guestId) {
@@ -76,6 +91,12 @@ export function listArenas(now = Date.now()) {
   return [...arenas.values()].map(publicArena);
 }
 
+/** Every arena with who stands on it (see `occupantsOf`), for the lobby's frequent check. */
+export function watchArenas(now = Date.now()) {
+  for (const arena of arenas.values()) refresh(arena, now);
+  return [...arenas.values()].map((arena) => ({ ...publicArena(arena), occupants: occupantsOf(arena) }));
+}
+
 /** Arenas with someone waiting for an opponent. */
 export const listQuickJoin = () =>
   [...arenas.values()]
@@ -99,16 +120,18 @@ export function leaveArena(guestId, now = Date.now()) {
 }
 
 /**
- * Puts the guest on `spot` of `arenaId` (leaving any spot they held). `info` is { name, avatar }, shown to the
- * opponent. Returns { arena, duel } or { error }: unknown arena or spot, the spot is someone else's, or a duel
- * is on there.
+ * Puts the guest on `spot` of `arenaId` (leaving any spot they held); if someone else has that spot, on the
+ * other one when it's free. `info` is { name, avatar }, shown to the opponent. Returns { arena, spot, duel } or
+ * { error }: unknown arena or spot, both spots are someone else's, or a duel is on there.
  */
-export function joinArena(guestId, arenaId, spot, info, now = Date.now()) {
+export function joinArena(guestId, arenaId, asked, info, now = Date.now()) {
   const arena = arenas.get(arenaId);
-  if (!arena || !SPOTS.includes(spot)) return { error: 'No such arena spot' };
+  if (!arena || !SPOTS.includes(asked)) return { error: 'No such arena spot' };
   refresh(arena, now);
+  const takenByOther = (s) => arena.spots[s] && arena.spots[s] !== guestId;
+  const spot = takenByOther(asked) ? SPOTS.find((s) => !takenByOther(s)) : asked;
+  if (!spot) return { error: 'That spot is taken' };
   const holder = arena.spots[spot];
-  if (holder && holder !== guestId) return { error: 'That spot is taken' };
   if (arena.match && !sideOf(arena.match, guestId)) return { error: 'A duel is on there' };
   if (holder !== guestId) {
     leaveArena(guestId, now);
@@ -117,7 +140,7 @@ export function joinArena(guestId, arenaId, spot, info, now = Date.now()) {
   arena.guests[guestId] = info;
   arena.seen[guestId] = now;
   refresh(arena, now);
-  return { arena: publicArena(arena), duel: duelView(arena, guestId, now) };
+  return { arena: publicArena(arena), spot, duel: duelView(arena, guestId, now) };
 }
 
 /** Where the guest stands and how their duel is going: { seated, spot, arena, duel }. Also keeps them in it. */

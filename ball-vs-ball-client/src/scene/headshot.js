@@ -2,6 +2,14 @@ import * as THREE from 'three';
 import { HEADSHOT_LAYER } from '../objects/player/LegionCharacter.js';
 
 const SIZE = 256;
+const lit = new WeakSet(); // scenes whose lights already shine on the headshot layer
+const HUD_SIZE = 128; // the HUD's copy: its portraits are about 100 px, and a smaller read back costs less
+
+/** Resolves in a quiet moment between frames (soon anyway). */
+export const idle = () => new Promise((resolve) => {
+  if (window.requestIdleCallback) window.requestIdleCallback(() => resolve(), { timeout: 400 });
+  else setTimeout(resolve, 50);
+});
 
 // Linear light to sRGB bytes, for reading a headshot back out as an image.
 const TO_SRGB = Array.from({ length: 256 }, (_, i) => {
@@ -13,13 +21,20 @@ const TO_SRGB = Array.from({ length: 256 }, (_, i) => {
  * A player's picture for the duel board and HUD: the character's head and shoulders, rendered from the front
  * into a small texture with a clear background. `capture()` redraws it (once the avatar has loaded, and when
  * the character joins an arena, so it shows the way they face); it costs one tiny render, not one per frame.
- * `toDataURL()` reads the last capture back as a PNG, for the HUD's round portraits.
+ * `toImage()` reads the last capture back as an ImageBitmap, for the HUD's round portraits. It never stalls
+ * the game: it waits for a quiet moment between frames, and the pixels come back from the GPU when they are
+ * ready (a plain read would wait for every frame the GPU still has queued).
  */
-export function createHeadshot(renderer, scene, character) {
+export function createHeadshot(renderer, scene, character, { hud = true } = {}) {
   const target = new THREE.WebGLRenderTarget(SIZE, SIZE, { samples: 4 });
+  // Players only seen on an arena's screen (not duelling us) need no HUD portrait.
+  const hudTarget = hud ? new THREE.WebGLRenderTarget(HUD_SIZE, HUD_SIZE, { samples: 4 }) : null;
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 60);
   camera.layers.set(HEADSHOT_LAYER);
-  scene.traverse((object) => { if (object.isLight) object.layers.enable(HEADSHOT_LAYER); });
+  if (!lit.has(scene)) {
+    lit.add(scene);
+    scene.traverse((object) => { if (object.isLight) object.layers.enable(HEADSHOT_LAYER); });
+  }
 
   const head = new THREE.Vector3();
   const capture = () => {
@@ -34,38 +49,47 @@ export function createHeadshot(renderer, scene, character) {
     const clearColor = renderer.getClearColor(new THREE.Color());
     scene.background = null;
     scene.fog = null;
-    renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 0);
-    renderer.clear();
-    renderer.render(scene, camera);
+    for (const into of hudTarget ? [target, hudTarget] : [target]) {
+      renderer.setRenderTarget(into);
+      renderer.clear();
+      renderer.render(scene, camera);
+    }
     renderer.setRenderTarget(null);
     renderer.setClearColor(clearColor, clearAlpha);
     scene.background = background;
     scene.fog = fog;
   };
 
-  const toDataURL = () => {
-    const pixels = new Uint8Array(SIZE * SIZE * 4);
-    renderer.readRenderTargetPixels(target, 0, 0, SIZE, SIZE, pixels);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = SIZE;
-    const ctx = canvas.getContext('2d');
-    const image = ctx.createImageData(SIZE, SIZE);
-    // The render target's rows run bottom to top; images run top to bottom.
-    for (let y = 0; y < SIZE; y += 1) {
-      const from = (SIZE - 1 - y) * SIZE * 4;
-      const to = y * SIZE * 4;
-      for (let x = 0; x < SIZE * 4; x += 4) {
-        image.data[to + x] = TO_SRGB[pixels[from + x]];
-        image.data[to + x + 1] = TO_SRGB[pixels[from + x + 1]];
-        image.data[to + x + 2] = TO_SRGB[pixels[from + x + 2]];
-        image.data[to + x + 3] = pixels[from + x + 3];
+  const pixels = new Uint8Array(HUD_SIZE * HUD_SIZE * 4);
+  const image = new ImageData(HUD_SIZE, HUD_SIZE);
+  let reading = null;
+  const toImage = async () => {
+    // One read at a time: a capture taken meanwhile is picked up by the next call.
+    await reading;
+    reading = (async () => {
+      await idle();
+      await renderer.readRenderTargetPixelsAsync(hudTarget, 0, 0, HUD_SIZE, HUD_SIZE, pixels);
+      // The render target's rows run bottom to top; images run top to bottom.
+      for (let y = 0; y < HUD_SIZE; y += 1) {
+        const from = (HUD_SIZE - 1 - y) * HUD_SIZE * 4;
+        const to = y * HUD_SIZE * 4;
+        for (let x = 0; x < HUD_SIZE * 4; x += 4) {
+          image.data[to + x] = TO_SRGB[pixels[from + x]];
+          image.data[to + x + 1] = TO_SRGB[pixels[from + x + 1]];
+          image.data[to + x + 2] = TO_SRGB[pixels[from + x + 2]];
+          image.data[to + x + 3] = pixels[from + x + 3];
+        }
       }
-    }
-    ctx.putImageData(image, 0, 0);
-    return canvas.toDataURL('image/png');
+      // A bitmap the HUD draws as it is: no PNG to encode or decode.
+      return createImageBitmap(image);
+    })();
+    return reading;
   };
 
-  const dispose = () => target.dispose();
-  return { texture: target.texture, capture, toDataURL, dispose };
+  const dispose = () => {
+    target.dispose();
+    hudTarget?.dispose();
+  };
+  return { texture: target.texture, capture, toImage, dispose };
 }
