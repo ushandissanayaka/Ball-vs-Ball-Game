@@ -1,5 +1,6 @@
-// Movement input for the player character: WASD / arrow keys, or the on-screen joystick on touch screens.
-// `move` is the wanted direction relative to the camera: x = right, y = forward, each -1..1.
+// Movement input for the player character: WASD / arrow keys, or the on-screen joystick on touch screens, and
+// Space (or the on-screen Jump button) to jump. `move` is the wanted direction relative to the camera: x = right,
+// y = forward, each -1..1.
 
 const KEYS = {
   KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1],
@@ -9,9 +10,17 @@ const KEYS = {
 const held = new Set();
 const stick = { x: 0, y: 0 };
 let listening = false;
+let jumpAsked = false;
 
 const onKeyDown = (event) => {
-  if (KEYS[event.code] && !event.target.closest?.('input, textarea')) held.add(event.code);
+  if (event.target.closest?.('input, textarea')) return;
+  if (KEYS[event.code]) held.add(event.code);
+  if (event.code === 'Space') {
+    // Space jumps, and must not also press a HUD button that still has the focus from a click (or scroll).
+    event.preventDefault();
+    if (document.activeElement?.tagName === 'BUTTON') document.activeElement.blur();
+    if (!event.repeat) jumpAsked = true;
+  }
 };
 const onKeyUp = (event) => held.delete(event.code);
 const onBlur = () => held.clear();
@@ -27,6 +36,7 @@ export function startPlayerInput() {
 export function stopPlayerInput() {
   listening = false;
   held.clear();
+  jumpAsked = false;
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('blur', onBlur);
@@ -48,4 +58,16 @@ export function readMove() {
   }
   const length = Math.hypot(x, y);
   return length > 1 ? { x: x / length, y: y / length } : { x, y };
+}
+
+/** The on-screen Jump button was pressed. */
+export function pressJump() {
+  jumpAsked = true;
+}
+
+/** Whether a jump was asked for since the last call (each press jumps once). */
+export function takeJump() {
+  const asked = jumpAsked;
+  jumpAsked = false;
+  return asked;
 }

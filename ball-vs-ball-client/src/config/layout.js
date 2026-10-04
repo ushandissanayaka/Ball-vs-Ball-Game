@@ -19,6 +19,18 @@ export const NECK = { topZ: 50, topHalf: 14, shoulderZ: 58, bottomZ: 68, half: 2
  */
 export const RUNWAY = { startZ: 66, endZ: 340, laneHalf: 22, outerX: 62, tab: 14, stripHalf: 8, panelLength: 125 };
 
+/**
+ * The two conveyor strips down the middle of the lane (inside its `stripHalf`), from the bottom of the neck to the
+ * tab's end (only there: the neck and hub carry nobody):
+ * `half` wide each side of their middle, `x` apart from the lane's middle. Their chevrons scroll the way they
+ * point, and anyone standing on one is carried that way at `speed` (units per second): the west strip toward
+ * the hub (-z), the east strip away from it. `tile` is the length of one chevron repeat.
+ */
+export const CONVEYOR = {
+  x: 4, half: 3.2, fromZ: NECK.bottomZ, toZ: RUNWAY.endZ + RUNWAY.tab - 4, speed: 12, tile: 14,
+  strips: [{ side: -1, dir: -1 }, { side: 1, dir: 1 }],
+};
+
 /** Arena rows (z of each arena's centre), north to south, mirrored on both sides of the lane. */
 export const ARENA_ROWS = [100, 150, 200, 250, 300];
 export const ARENA_X = (RUNWAY.laneHalf + RUNWAY.outerX) / 2;

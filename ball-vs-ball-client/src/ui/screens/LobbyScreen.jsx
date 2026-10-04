@@ -5,7 +5,7 @@ import QuickJoin from '../hud/QuickJoin.jsx';
 import SideMenu from '../hud/SideMenu.jsx';
 import Wallet from '../hud/Wallet.jsx';
 import PlayDock from '../hud/PlayDock.jsx';
-import Joystick from '../hud/Joystick.jsx';
+import Joystick, { JumpButton } from '../hud/Joystick.jsx';
 import DuelHud, { JoinPrompt } from '../hud/DuelHud.jsx';
 
 /** Restarts the little lift-and-pop on whichever HUD button was clicked (see .pop in hud.css). */
@@ -35,6 +35,7 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions }) {
           </div>
           <PlayDock level={profile.level} />
           <Joystick />
+          <JumpButton />
         </>
       )}
       {(!inDuel || duel.duel.phase === 'choose') && <Wallet coins={profile.coins} gems={profile.gems} coinBoost={profile.coinBoost} now={now} />}

@@ -22,10 +22,11 @@ export const PLATFORM = {
   underside: '#16244a',
   insetLine: '#6aa0e6',
   lane: '#24365f',
-  laneCenter: '#1c2b4f',
   laneEdge: '#4a6aa6',
   neck: '#22335c',
-  chevron: '#e4ebf7',
+  conveyor: '#212b47', // the conveyor strips' dark belt
+  conveyorArrow: '#cfd9ee', // their chevrons, brightest at the tip
+
 };
 
 export const NEON = {

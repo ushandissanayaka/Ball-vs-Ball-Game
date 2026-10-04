@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { DECK_THICKNESS, FLOOR_Y, NECK, RUNWAY } from '../../config/layout.js';
+import { CONVEYOR, DECK_THICKNESS, FLOOR_Y, NECK, RUNWAY } from '../../config/layout.js';
 import { PLATFORM } from '../../config/palette.js';
+import { canvasTexture } from '../../util/canvasText.js';
 import { standard } from '../../util/materials.js';
 import { addMesh, box } from '../../util/mesh.js';
 import { deckFaces, glassDeck, insetLine } from './platformMaterials.js';
 
 const DEPTH = DECK_THICKNESS;
 const LANE_Y = FLOOR_Y - 0.1;
-const CHEVRON_STEP = 6;
 const RIM = 1.6; // dark lip along the decks' outer and south edges
 const INSET = 3.5; // light inset line inside each deck
 
@@ -16,13 +16,15 @@ const INSET = 3.5; // light inset line inside each deck
  * - two glass decks carrying the arenas; neon only on the edge facing the hub, a dark lip on the others and a
  *   thin light inset line all round;
  * - a dark lane between them that runs on past the decks as a glowing tab (the red ball sits at its end);
- * - a darker chevron strip down the lane's middle, flanked near the hub by two lighter glass panels whose far
- *   ends are cut on a slant.
+ * - two conveyor strips down the lane's middle, their chevrons scrolling the way they point (toward the hub on
+ *   the west strip, away from it on the east), flanked near the hub by two lighter glass panels whose far ends
+ *   are cut on a slant.
+ * `group.userData.animate(seconds)` scrolls the chevrons; `group.userData.animatedBounds` is the box they move in.
  */
 export function createRunway(neon) {
   const group = new THREE.Group();
   group.name = 'runway';
-  const { startZ, endZ, laneHalf, outerX, tab, stripHalf } = RUNWAY;
+  const { startZ, endZ, laneHalf, outerX, tab } = RUNWAY;
   const length = endZ - startZ;
   const midZ = (startZ + endZ) / 2;
   const deckWidth = outerX - laneHalf;
@@ -58,9 +60,6 @@ export function createRunway(neon) {
   const laneMid = startZ + laneLength / 2;
   const lane = standard(PLATFORM.lane, { roughness: 0.45, metalness: 0.1 });
   addMesh(group, new THREE.BoxGeometry(laneHalf * 2, DEPTH, laneLength), lane, { position: [0, LANE_Y - DEPTH / 2, laneMid] });
-  box(group, [stripHalf * 2, 0.04, laneLength - 2], standard(PLATFORM.laneCenter, { roughness: 0.35, metalness: 0.15 }), {
-    position: [0, LANE_Y + 0.02, laneMid], cast: false,
-  });
   const edge = standard(PLATFORM.laneEdge, { roughness: 0.4, emissive: PLATFORM.laneEdge, emissiveIntensity: 0.35 });
   for (const sign of [-1, 1]) {
     box(group, [0.7, 0.3, length], edge, { position: [sign * (laneHalf - 0.35), FLOOR_Y + 0.05, midZ], cast: false });
@@ -71,7 +70,10 @@ export function createRunway(neon) {
   neon.segment([-laneHalf + 0.6, endZ], [-laneHalf + 0.6, tabEnd - 0.6], { y: LANE_Y, outward: [-1, 0] });
   neon.segment([laneHalf - 0.6, endZ], [laneHalf - 0.6, tabEnd - 0.6], { y: LANE_Y, outward: [1, 0] });
 
-  group.add(createLanePanels(), createChevrons());
+  const conveyors = createConveyors();
+  group.add(createLanePanels(), conveyors.group);
+  group.userData.animate = conveyors.animate;
+  group.userData.animatedBounds = conveyors.bounds;
   return group;
 }
 
@@ -101,32 +103,92 @@ function createLanePanels() {
   return group;
 }
 
-function chevronGeometry() {
-  const outline = [[-2.4, -1.5], [0, 1.5], [2.4, -1.5], [1.35, -1.5], [0, 0.2], [-1.35, -1.5]];
-  const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: false });
-  geometry.rotateX(-Math.PI / 2); // lies flat, pointing north (-z)
-  return geometry;
+// One chevron repeat: the strip's width by `CONVEYOR.tile` long, at the same pixels per unit both ways.
+const TILE_PX = { width: 128, height: Math.round((128 * CONVEYOR.tile) / (CONVEYOR.half * 2)) };
+
+/**
+ * One repeat of a conveyor strip's pattern, pointing up the canvas: the dark belt with a pair of tall, steep
+ * chevrons one just behind the other, each brightest at its tip and fading out down its arms (as in the
+ * reference), then a gap before the next pair.
+ */
+function paintConveyorTile() {
+  const canvas = document.createElement('canvas');
+  const { width: w, height: h } = TILE_PX;
+  canvas.width = w;
+  canvas.height = h;
+  const c = canvas.getContext('2d');
+  c.fillStyle = PLATFORM.conveyor;
+  c.fillRect(0, 0, w, h);
+  const arrow = new THREE.Color(PLATFORM.conveyorArrow);
+  const rgba = (alpha) => `rgba(${Math.round(arrow.r * 255)}, ${Math.round(arrow.g * 255)}, ${Math.round(arrow.b * 255)}, ${alpha})`;
+  const rise = h * 0.56; // from the tip down to the arms' ends
+  const thick = h * 0.2; // how thick each arm is, measured along the strip (the steep arms look a third of that)
+  const edge = w * 0.03;
+  const chevron = (top, strength) => {
+    const fade = c.createLinearGradient(0, top, 0, top + rise + thick);
+    fade.addColorStop(0, rgba(strength));
+    fade.addColorStop(0.45, rgba(strength * 0.45));
+    fade.addColorStop(1, rgba(0));
+    c.fillStyle = fade;
+    c.beginPath();
+    c.moveTo(w / 2, top);
+    c.lineTo(w - edge, top + rise);
+    c.lineTo(w - edge, top + rise + thick);
+    c.lineTo(w / 2, top + thick);
+    c.lineTo(edge, top + rise + thick);
+    c.lineTo(edge, top + rise);
+    c.closePath();
+    c.fill();
+  };
+  // Drawn a tile above and below too, so the pattern runs on seamlessly where the repeats meet.
+  for (const shift of [-h, 0, h]) {
+    chevron(shift + h * 0.04, 0.95);
+    chevron(shift + h * 0.27, 0.6);
+  }
+  const texture = canvasTexture(canvas);
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8; // seen at a glancing angle down the runway
+  return texture;
 }
 
-/** Two columns of slim metallic chevrons down the strip: west column points north, east column south. */
-function createChevrons() {
-  const positions = [];
-  for (let z = NECK.topZ + 4; z <= RUNWAY.endZ + RUNWAY.tab - 8; z += CHEVRON_STEP) {
-    const y = z < NECK.bottomZ ? FLOOR_Y + 0.17 : LANE_Y + 0.07;
-    positions.push([-3, y, z, 0], [3, y, z, Math.PI]);
-  }
-  const material = standard(PLATFORM.chevron, { roughness: 0.45, metalness: 0.3, emissive: '#8fa9d8', emissiveIntensity: 0.3 });
-  const mesh = new THREE.InstancedMesh(chevronGeometry(), material, positions.length);
-  const dummy = new THREE.Object3D();
-  positions.forEach(([x, y, z, turn], index) => {
-    dummy.position.set(x, y, z);
-    dummy.rotation.set(0, turn, 0);
-    dummy.scale.set(0.75, 1, 1.5);
-    dummy.updateMatrix();
-    mesh.setMatrixAt(index, dummy.matrix);
+/** True when (x, z) is on conveyor strip `strip`. */
+const onStrip = (strip, x, z) => Math.abs(x - strip.side * CONVEYOR.x) <= CONVEYOR.half && z >= CONVEYOR.fromZ && z <= CONVEYOR.toZ;
+
+/** How fast a conveyor carries someone standing at (x, z), along z (units per second; 0 off the strips). */
+export function conveyorPush(x, z) {
+  const strip = CONVEYOR.strips.find((s) => onStrip(s, x, z));
+  return strip ? strip.dir * CONVEYOR.speed : 0;
+}
+
+/**
+ * The two conveyor strips: a dark belt a little proud of the lane, its top showing the chevron pattern. Both
+ * tops share one texture; the east one is turned round, so scrolling it moves each strip's chevrons the way
+ * they point.
+ */
+function createConveyors() {
+  const group = new THREE.Group();
+  const { x, half, fromZ, toZ, tile, speed } = CONVEYOR;
+  const length = toZ - fromZ;
+  const midZ = (fromZ + toZ) / 2;
+  const top = FLOOR_Y + 0.05;
+  const texture = paintConveyorTile();
+  texture.repeat.set(1, length / tile);
+  // Its own material (not a shared one from `standard`): the chevrons glow a little, as in the reference.
+  const face = new THREE.MeshStandardMaterial({
+    map: texture, emissive: '#ffffff', emissiveMap: texture, emissiveIntensity: 0.22, roughness: 0.75, metalness: 0,
   });
-  mesh.receiveShadow = true;
-  mesh.name = 'chevrons';
-  return mesh;
+  const belt = standard(PLATFORM.conveyor, { roughness: 0.75 });
+  for (const strip of CONVEYOR.strips) {
+    const cx = strip.side * x;
+    box(group, [half * 2, top - LANE_Y, length], belt, { position: [cx, (LANE_Y + top) / 2, midZ], cast: false });
+    const surface = new THREE.PlaneGeometry(half * 2, length);
+    surface.rotateX(-Math.PI / 2); // the texture's up runs north (-z)
+    if (strip.dir > 0) surface.rotateY(Math.PI); // pointing south
+    addMesh(group, surface, face, { position: [cx, top + 0.01, midZ], cast: false });
+  }
+  group.name = 'conveyors';
+  const bounds = new THREE.Box3(new THREE.Vector3(-x - half, LANE_Y, fromZ), new THREE.Vector3(x + half, top + 0.1, toZ));
+  // Moving the pattern toward its tips: the offset runs backwards, wrapped to stay small.
+  const animate = (seconds) => { texture.offset.y = -(((seconds * speed) / tile) % 1); };
+  return { group, animate, bounds };
 }

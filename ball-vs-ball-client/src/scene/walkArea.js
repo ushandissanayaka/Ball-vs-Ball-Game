@@ -8,12 +8,15 @@ const EDGE = 1.4; // keep this far inside the deck edge (the neon)
  * Props are round obstacles it slides round; arena bases are low steps it walks up onto.
  */
 export function createWalkArea() {
+  // Each floor keeps EDGE inside its open edges only: where one floor joins the next (hub to neck, neck to
+  // runway, runway to the tab) they overlap instead, so there is no unwalkable seam between them.
+  const JOIN = EDGE * 2;
   const floors = [
-    [HUB.minX, HUB.minZ, HUB.maxX, HUB.maxZ],
-    [-NECK.half, NECK.topZ, NECK.half, NECK.bottomZ],
-    [-RUNWAY.outerX, RUNWAY.startZ, RUNWAY.outerX, RUNWAY.endZ],
-    [-RUNWAY.laneHalf, RUNWAY.endZ - 1, RUNWAY.laneHalf, RUNWAY.endZ + RUNWAY.tab],
-  ].map(([x0, z0, x1, z1]) => [x0 + EDGE, z0 + EDGE, x1 - EDGE, z1 - EDGE]);
+    [HUB.minX + EDGE, HUB.minZ + EDGE, HUB.maxX - EDGE, HUB.maxZ - EDGE],
+    [-NECK.half + EDGE, NECK.topZ, NECK.half - EDGE, RUNWAY.startZ + JOIN],
+    [-RUNWAY.outerX + EDGE, RUNWAY.startZ + EDGE, RUNWAY.outerX - EDGE, RUNWAY.endZ - EDGE],
+    [-RUNWAY.laneHalf + EDGE, RUNWAY.endZ - JOIN, RUNWAY.laneHalf - EDGE, RUNWAY.endZ + RUNWAY.tab - EDGE],
+  ];
   const obstacles = []; // { x, z, r }
   const steps = []; // { inverse: Matrix4 (world to the step's own space), halfX, halfZ, height }
 
