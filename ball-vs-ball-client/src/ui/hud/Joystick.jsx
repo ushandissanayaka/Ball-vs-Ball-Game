@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { setStick } from '../../controls/playerInput.js';
+import { pressJump, setStick } from '../../controls/playerInput.js';
 
 /** On touch screens: a thumb stick (bottom right) that walks the character. Hidden where there is a keyboard. */
 export default function Joystick() {
@@ -41,5 +41,21 @@ export default function Joystick() {
     >
       <span className="joystick-knob" style={{ "--kx": knob.x, "--ky": knob.y }} />
     </section>
+  );
+}
+
+/** On touch screens: the Jump button, beside the thumb stick (Space on a keyboard). */
+export function JumpButton() {
+  return (
+    <button
+      type="button"
+      className="jump-button outlined"
+      onPointerDown={(event) => {
+        event.preventDefault(); // jump on the touch itself, not on its click
+        pressJump();
+      }}
+    >
+      Jump
+    </button>
   );
 }

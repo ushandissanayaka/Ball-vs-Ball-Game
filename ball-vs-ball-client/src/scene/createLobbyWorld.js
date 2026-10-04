@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CAMERA, SPAWN } from '../config/layout.js';
 import { getAvatarSpec, getPlayerName } from '../bloxity/sdk.js';
-import { readMove, startPlayerInput, stopPlayerInput } from '../controls/playerInput.js';
+import { readMove, startPlayerInput, stopPlayerInput, takeJump } from '../controls/playerInput.js';
+import { conveyorPush } from '../objects/platform/Runway.js';
 import { createLegionCharacter } from '../objects/player/LegionCharacter.js';
 import { createDuelDirector } from './duel/duelDirector.js';
 import { createDuelWarmup, warmUpRenderer } from './duel/duelWarmup.js';
@@ -21,6 +22,8 @@ const COUNTDOWN_REFRESH_MS = 30_000;
 const WALK_SPEED = 26; // world units per second
 const CHARACTER_RADIUS = 1.3;
 const EYE_HEIGHT = 4.2; // the camera orbits this far above the character's feet
+// A jump: up at `speed`, pulled back by `gravity` (about 4 units high, 0.7 s in the air).
+const JUMP = { speed: 24, gravity: 70 };
 
 /**
  * The 3D lobby on `canvas`. Only the sea moves, so while the camera is still the picture is redrawn just often
@@ -115,10 +118,13 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   const right = new THREE.Vector3();
   const step = new THREE.Vector3();
   const eye = new THREE.Vector3();
-  /** Walks the character from the input; true while it moves. */
+  let rise = 0; // upward speed while in the air (a jump)
+  let airborne = false;
+  /** Walks the character from the input (riding the conveyors, jumping); true while it moves. */
   const moveCharacter = (dt) => {
     // On a duel square the character stands still (the duel uses the same keys to aim).
     const input = duel.seated ? { x: 0, y: 0 } : readMove();
+    const jump = takeJump() && !duel.seated;
     const speed = Math.min(1, Math.hypot(input.x, input.y));
     const position = character.group.position;
     if (speed > 0.01) {
@@ -131,13 +137,31 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
       const diff = Math.atan2(Math.sin(want - character.group.rotation.y), Math.cos(want - character.group.rotation.y));
       character.group.rotation.y += diff * Math.min(1, dt * 12);
     }
-    // Step up onto (and down off) the arena bases smoothly.
+    // Standing on a conveyor strip carries the character the way its arrows point (in the air it doesn't, so a
+    // jump takes it off the strip).
+    const push = airborne || duel.seated ? 0 : conveyorPush(position.x, position.z);
+    if (push) lobby.walkArea.move(position, 0, push * dt, CHARACTER_RADIUS);
+    if (jump && !airborne) {
+      airborne = true;
+      rise = JUMP.speed;
+    }
     const ground = lobby.walkArea.groundAt(position.x, position.z);
-    position.y += (ground - position.y) * Math.min(1, dt * 14);
+    if (airborne && !duel.seated) {
+      rise -= JUMP.gravity * dt;
+      position.y += rise * dt;
+      if (position.y <= ground) {
+        position.y = ground;
+        airborne = false;
+      }
+    } else {
+      airborne = false;
+      // Step up onto (and down off) the arena bases smoothly.
+      position.y += (ground - position.y) * Math.min(1, dt * 14);
+    }
     const settling = Math.abs(ground - position.y) > 0.01;
     character.update(dt, duel.seated ? duel.seatWalk : speed);
     controls.follow(eye.copy(position).setY(position.y + EYE_HEIGHT));
-    return speed > 0.01 || settling;
+    return speed > 0.01 || settling || airborne || push !== 0;
   };
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
@@ -155,11 +179,12 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (watch.update()) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
-    // The shop's show plays at animFps, but only while it is on screen; off screen it costs nothing.
+    // The shop's show and the conveyors play at animFps, but only while on screen; off screen they cost nothing.
     camera.updateMatrixWorld();
     viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(viewProjection);
-    const showDue = frustum.intersectsSphere(lobby.animatedBounds) && time - lastDraw >= 1000 / settings.animFps - 2;
+    const onScreen = lobby.animatedBounds.some((bounds) => (bounds.isBox3 ? frustum.intersectsBox(bounds) : frustum.intersectsSphere(bounds)));
+    const showDue = onScreen && time - lastDraw >= 1000 / settings.animFps - 2;
     if (!needsRender && !waterDue && !showDue) return;
     needsRender = false;
     lastDraw = time;

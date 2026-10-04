@@ -238,7 +238,13 @@
   background: rgba(255, 255, 255, 0.85); box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.35);
   transform: translate(calc(-50% + var(--kx, 0) * 70 * var(--u)), calc(-50% + var(--ky, 0) * 70 * var(--u)));
 }
-@media (pointer: coarse) { .joystick { display: block; } }
+/* Jump: a round button up and to the left of the stick. */
+.hud .jump-button {
+  display: none; position: absolute; right: calc(262 * var(--u)); bottom: calc(150 * var(--u));
+  width: calc(112 * var(--u)); height: calc(112 * var(--u)); border-radius: 50%; touch-action: none;
+  background: rgba(16, 22, 38, 0.45); border: calc(3 * var(--u)) solid rgba(255, 255, 255, 0.6); font-size: calc(22 * var(--u));
+}
+@media (pointer: coarse) { .joystick, .hud .jump-button { display: block; } }
 
 /* ---- Duel: Join prompt over an arena square -------------------------------------------------------- */
 .hud .join-prompt {

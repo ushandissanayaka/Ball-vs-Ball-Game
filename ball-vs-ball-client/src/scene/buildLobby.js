@@ -29,7 +29,8 @@ export function buildLobby() {
   const root = new THREE.Group();
   root.name = 'lobby';
   const neon = new NeonBuilder();
-  root.add(createHub(neon), createRunway(neon), createSupportBlocks());
+  const runway = createRunway(neon);
+  root.add(createHub(neon), runway, createSupportBlocks());
 
   const now = Date.now();
   const allTime = createLeaderboard({ title: 'Top Spenders', rows: SEED_LEADERBOARDS.allTime });
@@ -62,9 +63,10 @@ export function buildLobby() {
   walkArea.addObstacle(info, 4.5);
   for (const x of [-5.5, 5.5]) walkArea.addObstacle(shop.group, 7.5, [x, 0]);
   shop.setEndsIn(formatDayHour(nextLimitedOfferEnd(now) - now));
-  // Room round the shop's show (bike, smoke column, chain spike), for the "is it on screen?" check.
+  // What moves on its own, for the "is it on screen?" check: room round the shop's show (bike, smoke column,
+  // chain spike) and the conveyor strips.
   shop.group.updateMatrixWorld(true);
-  const animatedBounds = new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(-2, 9, 0)), 20);
+  const animatedBounds = [new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(-2, 9, 0)), 20), runway.userData.animatedBounds];
 
   // Arenas: W1..W5 on the west deck, E1..E5 on the east, north to south.
   const arenas = new Map();
@@ -104,7 +106,10 @@ export function buildLobby() {
     shop.setEndsIn(formatDayHour((lobby?.limitedOffer.endsAt ?? nextLimitedOfferEnd(time)) - time));
   };
   /** Moves the limited shop's show to `seconds`. */
-  const animate = (seconds) => shop.update(seconds);
+  const animate = (seconds) => {
+    shop.update(seconds);
+    runway.userData.animate(seconds);
+  };
   /** Moves the arenas' VS boards; true while any is still moving. */
   const updateArenas = (dt) => {
     let moving = false;
