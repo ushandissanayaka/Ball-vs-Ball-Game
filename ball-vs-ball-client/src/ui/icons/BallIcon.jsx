@@ -4,6 +4,7 @@ import React, { useId } from 'react';
 // and each kind's mark. `kind` 'unknown' is the grey "?" ball shown before a player's choice is revealed.
 
 const SHADES = {
+  verity: ['#fffbb0', '#f5e62a', '#b8a80e'],
   electric: ['#8cc6ff', '#1f6fe6', '#0d3a8f'],
   charge: ['#9ff6ee', '#2fd3c4', '#14857b'],
   cell: ['#b6f39c', '#4fc760', '#24803a'],
@@ -17,6 +18,15 @@ const SHADES = {
 
 function Mark({ kind, id }) {
   switch (kind) {
+    case 'verity':
+      return (
+        <>
+          <ellipse cx="40" cy="38" rx="5" ry="9" fill="#1a1708" />
+          <ellipse cx="60" cy="38" rx="5" ry="9" fill="#1a1708" />
+          <path d="M24 52 Q50 82 76 52" fill="none" stroke="#1a1708" strokeWidth="5" strokeLinecap="round" />
+          <path d="M21 47 L27 56 M79 47 L73 56" stroke="#1a1708" strokeWidth="3.5" strokeLinecap="round" />
+        </>
+      );
     case 'electric':
       return <path d="M57 16 L33 54 L48 54 L41 86 L68 44 L53 44 L63 16 Z" fill="#fff" stroke="#0b2a66" strokeWidth="3" strokeLinejoin="round" />;
     case 'charge':

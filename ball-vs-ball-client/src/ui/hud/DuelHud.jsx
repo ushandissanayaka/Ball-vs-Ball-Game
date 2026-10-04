@@ -1,8 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BALLS, BALL_IDS } from '../../shared/balls.js';
 import BallIcon from '../icons/BallIcon.jsx';
 import { CoinIcon, GemIcon, HeartIcon, RefreshIcon } from '../icons/Icons.jsx';
 import QueuePanel from './QueuePanel.jsx';
+
+/** A player's picture (an ImageBitmap of their character's head and shoulders), drawn into a canvas. */
+function Portrait({ picture }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !picture) return;
+    canvas.width = picture.width;
+    canvas.height = picture.height;
+    canvas.getContext('2d').drawImage(picture, 0, 0);
+  }, [picture]);
+  return picture ? <canvas ref={ref} className="badge-portrait" /> : null;
+}
 
 /** A player's corner of the duel screen: round picture, name, hearts, and the ball they fight with. */
 function PlayerBadge({ side, player }) {
@@ -10,7 +23,7 @@ function PlayerBadge({ side, player }) {
   return (
     <section className={`badge badge-${side}`}>
       <div className="badge-top">
-        <div className="badge-avatar">{player.picture && <img src={player.picture} alt="" />}</div>
+        <div className="badge-avatar"><Portrait picture={player.picture} /></div>
         <div className="badge-info">
           <div className="badge-name">{player.name}</div>
           <div className="badge-hearts">

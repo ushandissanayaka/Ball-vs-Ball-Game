@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { CAMERA, SPAWN } from '../config/layout.js';
-import { getAvatarSpec } from '../bloxity/sdk.js';
+import { getAvatarSpec, getPlayerName } from '../bloxity/sdk.js';
 import { readMove, startPlayerInput, stopPlayerInput } from '../controls/playerInput.js';
 import { createLegionCharacter } from '../objects/player/LegionCharacter.js';
 import { createDuelDirector } from './duel/duelDirector.js';
+import { createDuelWarmup, warmUpRenderer } from './duel/duelWarmup.js';
+import { createArenaWatch } from './duel/arenaWatch.js';
 import { createHeadshot } from './headshot.js';
 import { QUALITY } from '../config/graphics.js';
 import { SKY } from '../config/palette.js';
@@ -70,6 +72,11 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   const controls = createCameraControls(camera, canvas, cam?.length === 6 && cam.every(Number.isFinite) ? cam : null);
   const duel = createDuelDirector({
     scene, camera, canvas, renderer, arenas: lobby.arenas, character, headshot, controls, onChange: onDuelChange, onProfile,
+    onLeave: (arenaId) => watch.left(arenaId),
+  });
+  // Everyone else on the arenas: their characters on the squares, their pictures and names on the screens.
+  const watch = createArenaWatch({
+    scene, renderer, arenas: lobby.arenas, seatArenaId: () => duel.seatArenaId, myName: getPlayerName,
   });
   let settings = QUALITY[quality] ?? QUALITY.High;
   let composer = null;
@@ -128,12 +135,16 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     const ground = lobby.walkArea.groundAt(position.x, position.z);
     position.y += (ground - position.y) * Math.min(1, dt * 14);
     const settling = Math.abs(ground - position.y) > 0.01;
-    character.update(dt, duel.seated ? 0 : speed);
+    character.update(dt, duel.seated ? duel.seatWalk : speed);
     controls.follow(eye.copy(position).setY(position.y + EYE_HEIGHT));
     return speed > 0.01 || settling;
   };
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
+  const draw = (dt = 0) => {
+    if (settings.bloom && composer) composer.render(dt);
+    else renderer.render(scene, camera);
+  };
   const loop = (time) => {
     frame = requestAnimationFrame(loop);
     const dt = Math.min(0.1, (time - last) / 1000);
@@ -141,6 +152,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (moveCharacter(dt)) needsRender = true;
     if (lobby.updateArenas(dt)) needsRender = true;
     if (duel.update(dt, time / 1000)) needsRender = true;
+    if (watch.update()) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
     // The shop's show plays at animFps, but only while it is on screen; off screen it costs nothing.
@@ -153,8 +165,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     lastDraw = time;
     if (settings.waterFps > 0) sea.userData.update(time / 1000);
     lobby.animate(frozenShow ?? time / 1000);
-    if (settings.bloom && composer) composer.render(dt);
-    else renderer.render(scene, camera);
+    draw(dt);
   };
 
   const observer = new ResizeObserver(resize);
@@ -164,6 +175,13 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     startPlayerInput();
     duel.start();
     setQuality(quality);
+    // Get every shader, texture and mesh the duel will use onto the GPU now, behind the loading screen, not
+    // the first time each one is drawn mid-duel.
+    const warmup = createDuelWarmup();
+    scene.add(warmup);
+    warmUpRenderer(renderer, scene, draw);
+    warmup.visible = false;
+    watch.start();
     countdownTimer = setInterval(() => { lobby.apply(null); requestRender(); }, COUNTDOWN_REFRESH_MS);
     frame = requestAnimationFrame(loop);
   };
@@ -177,6 +195,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     cancelAnimationFrame(frame);
     stopPlayerInput();
     duel.dispose();
+    watch.dispose();
     clearInterval(countdownTimer);
     observer.disconnect();
     controls.dispose();

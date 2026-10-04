@@ -22,14 +22,69 @@ const sphereGeometry = new THREE.SphereGeometry(1, 40, 28);
 let rockGeometry = null;
 let spikeGeometry = null;
 
+/** The Verity Ball's face: a wide smile, or (transformed) heavy-lidded eyes under flat brows and a flat mouth. */
+function paintVerityFace(c, grim) {
+  c.fillStyle = '#16140a';
+  c.strokeStyle = '#16140a';
+  c.lineCap = 'round';
+  if (!grim) {
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.ellipse(CX + side * 20, CY - 20, 8, 15, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.lineWidth = 9;
+    c.beginPath();
+    c.moveTo(CX - 46, CY + 2);
+    c.quadraticCurveTo(CX, CY + 58, CX + 46, CY + 2);
+    c.stroke();
+    // Little cheek ends on the smile.
+    c.lineWidth = 6;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(CX + side * 52, CY - 6);
+      c.lineTo(CX + side * 40, CY + 8);
+      c.stroke();
+    }
+    return;
+  }
+  for (const side of [-1, 1]) {
+    // Half-shut eyes: a white sliver under a dark lid, and a thick flat brow over it.
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.ellipse(CX + side * 24, CY - 16, 16, 9, 0, 0, Math.PI);
+    c.fill();
+    c.fillStyle = '#16140a';
+    c.beginPath();
+    c.ellipse(CX + side * 24 + side * 3, CY - 13, 6, 6, 0, 0, Math.PI * 2);
+    c.fill();
+    c.lineWidth = 7;
+    c.beginPath();
+    c.moveTo(CX + side * 8, CY - 18);
+    c.lineTo(CX + side * 42, CY - 20);
+    c.stroke();
+    c.lineWidth = 9;
+    c.beginPath();
+    c.moveTo(CX + side * 6, CY - 32);
+    c.quadraticCurveTo(CX + side * 26, CY - 40, CX + side * 44, CY - 30);
+    c.stroke();
+  }
+  c.lineWidth = 7;
+  c.beginPath();
+  c.moveTo(CX - 18, CY + 30);
+  c.quadraticCurveTo(CX, CY + 24, CX + 18, CY + 30);
+  c.stroke();
+}
+
 function paintSkin(kind) {
+  const ballKind = kind === 'verity-grim' ? 'verity' : kind;
   const color = document.createElement('canvas');
   const glowCanvas = document.createElement('canvas');
   color.width = glowCanvas.width = SKIN_W;
   color.height = glowCanvas.height = SKIN_H;
   const c = color.getContext('2d');
   const g = glowCanvas.getContext('2d');
-  c.fillStyle = BALLS[kind].color;
+  c.fillStyle = BALLS[ballKind].color;
   c.fillRect(0, 0, SKIN_W, SKIN_H);
   g.fillStyle = '#000';
   g.fillRect(0, 0, SKIN_W, SKIN_H);
@@ -42,6 +97,17 @@ function paintSkin(kind) {
   };
 
   switch (kind) {
+    case 'verity':
+    case 'verity-grim': {
+      // A soft lime shade toward the back, as on the reference ball.
+      const shade = c.createRadialGradient(CX, CY, 30, CX, CY, 260);
+      shade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      shade.addColorStop(1, 'rgba(150, 190, 20, 0.45)');
+      c.fillStyle = shade;
+      c.fillRect(0, 0, SKIN_W, SKIN_H);
+      paintVerityFace(c, kind === 'verity-grim');
+      break;
+    }
     case 'electric': {
       const bolt = [[12, -52], [-24, 6], [-3, 6], [-14, 52], [28, -10], [6, -10], [18, -52]];
       const path = (ctx) => {
@@ -182,7 +248,7 @@ function spikes() {
 /** The axe an Axe Ball swings: a wooden handle out from the ball and a steel head, edge leading the swing. */
 function axeModel(radius) {
   const group = new THREE.Group();
-  const reach = radius + 6.5; // the blade's middle, as in the simulation
+  const reach = radius + 7.5; // the blade's middle, as in the simulation
   const handle = new THREE.Mesh(
     new THREE.CylinderGeometry(0.8, 0.8, reach + 1.5 - radius * 0.4, 10),
     new THREE.MeshStandardMaterial({ color: '#5e3a1f', roughness: 0.7 }),
@@ -240,15 +306,18 @@ export function numberTexture(text, fill = '#ffffff', stroke = '#14161c') {
   return entry;
 }
 
+// `coat`: a glossy clear coat over the paint (it catches the sky's reflection, so the balls read as round and
+// shiny, like the reference); the rock is left matte.
 const LOOKS = {
-  electric: { roughness: 0.3, metalness: 0.1, glow: 1.2 },
-  charge: { roughness: 0.3, metalness: 0.1, glow: 0.6 },
-  cell: { roughness: 0.25, metalness: 0, glow: 0.5 },
-  axe: { roughness: 0.32, metalness: 0.45, glow: 2.2 },
-  snake: { roughness: 0.55, metalness: 0, glow: 0 },
-  spike: { roughness: 0.35, metalness: 0.05, glow: 0 },
-  fire: { roughness: 0.4, metalness: 0, glow: 1.4 },
-  rock: { roughness: 0.95, metalness: 0, glow: 0 },
+  verity: { roughness: 0.32, metalness: 0, glow: 0, coat: 1 },
+  electric: { roughness: 0.28, metalness: 0.1, glow: 1.2, coat: 1 },
+  charge: { roughness: 0.28, metalness: 0.1, glow: 0.6, coat: 1 },
+  cell: { roughness: 0.22, metalness: 0, glow: 0.5, coat: 1 },
+  axe: { roughness: 0.3, metalness: 0.45, glow: 2.2, coat: 0.8 },
+  snake: { roughness: 0.45, metalness: 0, glow: 0, coat: 0.7 },
+  spike: { roughness: 0.32, metalness: 0.05, glow: 0, coat: 1 },
+  fire: { roughness: 0.36, metalness: 0, glow: 1.4, coat: 0.8 },
+  rock: { roughness: 0.95, metalness: 0, glow: 0, coat: 0 },
 };
 
 /**
@@ -262,9 +331,10 @@ export function createBallModel(kind, radius) {
   const group = new THREE.Group();
   const body = new THREE.Group();
   group.add(body);
-  const material = new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshPhysicalMaterial({
     map: skin.map, emissiveMap: skin.glow, emissive: '#ffffff', emissiveIntensity: look.glow,
     roughness: look.roughness, metalness: look.metalness, flatShading: kind === 'rock',
+    clearcoat: look.coat, clearcoatRoughness: 0.12, envMapIntensity: 1.25,
   });
   const ball = new THREE.Mesh(kind === 'rock' ? rock() : sphereGeometry, material);
   if (kind === 'snake') ball.scale.set(1, 1.06, 0.96);
@@ -296,6 +366,14 @@ export function createBallModel(kind, radius) {
   group.add(shadow);
   extras.push(shadowMaterial);
 
+  // A soft white glint up and to the left of the ball's face (it stays put while the ball rolls): the round,
+  // glossy look of the reference balls.
+  const glint = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: dotTexture(), color: '#ffffff', blending: THREE.AdditiveBlending, transparent: true, opacity: kind === 'rock' ? 0.18 : 0.5, depthWrite: false,
+  }));
+  group.add(glint);
+  extras.push(glint.material);
+
   // State shells: a white flash on hits, ice while frozen, a halo for charge and flames for fire.
   const flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: '#ffffff', blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
   group.add(flashSprite);
@@ -323,7 +401,8 @@ export function createBallModel(kind, radius) {
   let r = radius;
   let shownHp = null;
   let flashLeft = 0;
-  let state = { frozen: false, burning: false, charge: 0 };
+  let state = { frozen: false, burning: false, charge: 0, transformed: false };
+  let grim = false;
 
   const setRadius = (next) => {
     r = next;
@@ -332,6 +411,8 @@ export function createBallModel(kind, radius) {
     shadow.position.set(r * 0.3, -r * 0.45, -(r + 0.9) + 0.15);
     shadow.scale.setScalar(r * 2.6);
     label.position.set(0, 0, r + 1.5);
+    glint.position.set(-r * 0.38, r * 0.42, r * 0.95);
+    glint.scale.setScalar(r * 0.7);
     const height = Math.max(6.5, r * 1.05);
     if (shownHp !== null) label.scale.set(height * numberTexture(shownHp).aspect, height, 1);
   };
@@ -340,24 +421,34 @@ export function createBallModel(kind, radius) {
     if (text === shownHp) return;
     shownHp = text;
     const entry = numberTexture(text);
+    if (!label.material.map) label.material.needsUpdate = true; // the first map changes the shader; swaps don't
     label.material.map = entry.texture;
-    label.material.needsUpdate = true;
     const height = Math.max(6.5, r * 1.05);
     label.scale.set(height * entry.aspect, height, 1);
   };
   const setAxe = (dx, dy) => { if (axe) axe.rotation.z = Math.atan2(dy, dx); };
-  const setState = (next) => { state = next; };
+  const setState = (next) => {
+    state = next;
+    if (kind === 'verity' && Boolean(next.transformed) !== grim) {
+      grim = Boolean(next.transformed);
+      material.map = skinOf(grim ? 'verity-grim' : 'verity').map;
+      material.needsUpdate = true;
+      flashLeft = 0.18;
+    }
+  };
   const flash = () => { flashLeft = 0.18; };
 
   let roll = 0;
   const update = (dt, time, vx = 0, vy = 0) => {
-    // Roll along the way it moves (the snake keeps its face upright; the axe ball's seam stays put).
-    if (kind !== 'snake' && kind !== 'axe' && !state.frozen) {
+    // Roll along the way it moves (faces stay upright; the axe ball's seam stays put).
+    const faced = kind === 'snake' || kind === 'verity';
+    if (!faced && kind !== 'axe' && !state.frozen) {
       roll -= (vx * dt) / Math.max(1, r);
       body.rotation.z = roll * 0.5;
       body.rotation.y = Math.sin(time * 0.8 + radius) * 0.25;
     }
-    if (kind === 'snake') body.rotation.z = Math.sin(time * 6) * 0.08;
+    if (faced) body.rotation.z = Math.sin(time * 6) * 0.08;
+    if (kind === 'verity') body.rotation.y = Math.max(-0.35, Math.min(0.35, vx * 0.004));
     if (kind === 'cell') body.scale.set(r * (1 + Math.sin(time * 5) * 0.03), r * (1 - Math.sin(time * 5) * 0.03), r);
     if (kind === 'fire') material.emissiveIntensity = look.glow * (0.85 + Math.sin(time * 23) * 0.1 + Math.sin(time * 37) * 0.08);
     if (kind === 'charge') material.emissiveIntensity = 0.4 + state.charge * 2.6;

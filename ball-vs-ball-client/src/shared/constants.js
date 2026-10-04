@@ -7,6 +7,7 @@ export const GAME = { slug: 'ball-vs-ball', name: 'Ball vs Ball' };
 export const ROUTES = {
   health: '/health',
   lobby: '/api/lobby',
+  arenas: '/api/arenas',
   session: '/api/session',
   arenaJoin: '/api/arena/join',
   arenaLeave: '/api/arena/leave',

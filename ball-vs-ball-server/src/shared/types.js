@@ -6,6 +6,10 @@
  *
  * @typedef {{ id: string, players: number, capacity: number, reward: number }} ArenaState
  *
+ * @typedef {{ name: string, avatar: { skinUrl?: string, equipped?: { skinId?: string } } }} ArenaOccupant
+ * @typedef {ArenaState & { occupants: { live: boolean, launchAt: number, pink: ArenaOccupant | null, blue: ArenaOccupant | null } }} ArenaWatch
+ *   GET /api/arenas → { serverTime, arenas: ArenaWatch[] }, asked every couple of seconds
+ *
  * @typedef {Object} LobbySnapshot   GET /api/lobby
  * @property {number} serverTime
  * @property {{ allTime: LeaderboardRow[], weekly: LeaderboardRow[], weeklyResetsAt: number }} leaderboards
