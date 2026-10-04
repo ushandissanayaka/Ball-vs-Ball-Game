@@ -179,7 +179,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     // the first time each one is drawn mid-duel.
     const warmup = createDuelWarmup();
     scene.add(warmup);
-    warmUpRenderer(renderer, scene, draw);
+    warmUpRenderer(renderer, scene, camera, draw);
     warmup.visible = false;
     watch.start();
     countdownTimer = setInterval(() => { lobby.apply(null); requestRender(); }, COUNTDOWN_REFRESH_MS);

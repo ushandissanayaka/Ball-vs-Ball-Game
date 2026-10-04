@@ -318,6 +318,28 @@
 .ball-card-icon { width: calc(128 * var(--cu)); height: calc(128 * var(--cu)); }
 .ball-card-blurb { margin: auto 0 calc(66 * var(--cu)); font: 800 calc(24 * var(--cu)) / 1.25 var(--body); letter-spacing: 0; text-align: center; }
 .hud .ball-card.picked { border-color: #ffd23a; box-shadow: 0 0 0 calc(3 * var(--cu)) #ffd23a, 0 0 calc(30 * var(--cu)) rgba(255, 210, 58, 0.55); }
+.duel-wait { --cu: min(var(--u), calc(100vh / 900)); }
+.choose-title {
+  position: absolute; top: calc(66 * var(--cu)); left: 50%; transform: translateX(-50%); margin: 0;
+  font-weight: 400; font-size: calc(36 * var(--cu)); letter-spacing: 0.01em; white-space: nowrap;
+}
+.choose-cards { position: absolute; left: 50%; top: calc(178 * var(--cu)); transform: translateX(-50%); display: flex; gap: calc(98 * var(--cu)); }
+.hud .ball-card {
+  box-sizing: border-box; width: calc(296 * var(--cu)); height: calc(482 * var(--cu));
+  display: flex; flex-direction: column; align-items: center; padding: calc(50 * var(--cu)) calc(20 * var(--cu)) 0;
+  background: rgba(16, 21, 36, 0.96); border: calc(2 * var(--cu)) solid #e9edf5; animation: card-in 0.4s ease-out backwards;
+}
+.hud .ball-card:nth-child(2) { animation-delay: 0.06s; }
+.hud .ball-card:nth-child(3) { animation-delay: 0.12s; }
+@keyframes card-in { from { opacity: 0; transform: translateY(calc(30 * var(--u))) scale(0.94); } }
+.ball-card-name { font: 800 calc(25 * var(--cu)) var(--body); letter-spacing: 0; white-space: nowrap; }
+.ball-card-art {
+  display: grid; place-items: center; margin-top: calc(30 * var(--cu)); width: calc(172 * var(--cu)); height: calc(172 * var(--cu));
+  background: #4a4c55; border: calc(1.5 * var(--cu)) solid #6c6f79;
+}
+.ball-card-icon { width: calc(128 * var(--cu)); height: calc(128 * var(--cu)); }
+.ball-card-blurb { margin: auto 0 calc(66 * var(--cu)); font: 800 calc(24 * var(--cu)) / 1.25 var(--body); letter-spacing: 0; text-align: center; }
+.hud .ball-card.picked { border-color: #ffd23a; box-shadow: 0 0 0 calc(3 * var(--cu)) #ffd23a, 0 0 calc(30 * var(--cu)) rgba(255, 210, 58, 0.55); }
 .choose-cards.all { top: calc(150 * var(--cu)); display: grid; grid-template-columns: repeat(5, auto); gap: calc(20 * var(--cu)) calc(28 * var(--cu)); }
 .choose-cards.all .ball-card { width: calc(214 * var(--cu)); height: calc(272 * var(--cu)); padding-top: calc(18 * var(--cu)); }
 .choose-cards.all .ball-card-name { font-size: calc(20 * var(--cu)); }
@@ -341,6 +363,51 @@
 .reroll-gem { width: calc(56 * var(--cu)); height: calc(52 * var(--cu)); }
 .reroll-icon { width: calc(56 * var(--cu)); height: calc(56 * var(--cu)); }
 .reroll-label { position: absolute; bottom: calc(-30 * var(--cu)); left: 50%; transform: translateX(-50%); font-size: calc(36 * var(--cu)); }
+
+/* "Select Any Ball": a dark window of ball tiles, each framed in its rarity's colour (as in the reference). */
+.all-balls-panel {
+  --cu: min(var(--u), calc(100vh / 900));
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box;
+  width: calc(1068 * var(--cu)); height: calc(760 * var(--cu)); padding: 0 calc(8 * var(--cu)) calc(14 * var(--cu));
+  display: flex; flex-direction: column; background: #1b1e2b; border: calc(2 * var(--cu)) solid #3f73c4;
+  animation: card-in 0.3s ease-out both;
+}
+.all-balls-title {
+  margin: calc(8 * var(--cu)) 0 calc(4 * var(--cu)); text-align: center; font-weight: 400; font-size: calc(46 * var(--cu));
+  letter-spacing: 0; white-space: nowrap;
+}
+.all-balls-grid {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start;
+  display: grid; grid-template-columns: repeat(6, calc(170 * var(--cu))); gap: calc(6 * var(--cu)); justify-content: center;
+  scrollbar-width: thin; scrollbar-color: #4a5674 transparent;
+}
+.hud .ball-tile {
+  --frame: #4fa8ff;
+  position: relative; box-sizing: border-box; height: calc(170 * var(--cu)); display: flex; flex-direction: column;
+  background: linear-gradient(#1c2133, #262c44); border: calc(2.5 * var(--cu)) solid var(--frame);
+}
+.hud .ball-tile.epic { --frame: #b45cff; }
+.hud .ball-tile.legendary { --frame: #ffa81a; }
+.hud .ball-tile:hover { transform: translateY(calc(-3 * var(--cu))); filter: brightness(1.18); box-shadow: 0 0 calc(14 * var(--cu)) var(--frame); }
+.hud .ball-tile.selected {
+  border-color: #ffffff; filter: brightness(1.2);
+  box-shadow: 0 0 0 calc(3 * var(--cu)) var(--frame), 0 0 calc(22 * var(--cu)) var(--frame);
+}
+.ball-tile-art { flex: 1; display: grid; place-items: center; }
+.ball-tile-icon { width: calc(100 * var(--cu)); height: calc(100 * var(--cu)); }
+.ball-tile-name {
+  display: block; padding: calc(1 * var(--cu)) 0 calc(3 * var(--cu)); background: #414b6e; border-top: calc(2 * var(--cu)) solid var(--frame);
+  font: 900 calc(25 * var(--cu)) / 1.1 var(--body); letter-spacing: 0; white-space: nowrap; color: #fff;
+  -webkit-text-stroke: calc(4 * var(--cu)) #0b0d14; paint-order: stroke fill;
+}
+.all-balls-buttons { display: flex; justify-content: center; gap: calc(114 * var(--cu)); padding-top: calc(10 * var(--cu)); }
+.hud .all-balls-no, .hud .all-balls-yes {
+  width: calc(312 * var(--cu)); height: calc(76 * var(--cu)); font-size: calc(46 * var(--cu)); letter-spacing: 0;
+  -webkit-text-stroke: calc(5 * var(--cu)) var(--ink);
+}
+.hud .all-balls-no { background: linear-gradient(#ff1010, #c80000); border: calc(2 * var(--cu)) solid #5a0000; }
+.hud .all-balls-yes { background: linear-gradient(#3fe04a, #1f9f2a); border: calc(2 * var(--cu)) solid #0c3d10; }
+.hud .all-balls-yes:disabled { background: linear-gradient(#9a9a9a, #6e6e6e); border-color: #2a2a2a; cursor: default; transform: none; filter: none; }
 
 /* ---- Duel: aiming --------------------------------------------------------------------------------- */
 .aim-title {

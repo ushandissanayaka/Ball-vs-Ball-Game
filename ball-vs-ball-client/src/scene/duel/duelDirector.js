@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getAvatarSpec, getPlayerName } from '../../bloxity/sdk.js';
-import { arenaBase } from '../../config/layout.js';
+import { ARENA_BASE } from '../../config/layout.js';
 import { readMove } from '../../controls/playerInput.js';
 import { createSmokeBurst } from '../../effects/duelFx.js';
 import { arenaState, duelAim, duelChoose, duelReroll, joinArena, leaveArena } from '../../net/api.js';
@@ -16,10 +16,12 @@ import { createLocalDuel } from './localDuel.js';
 
 const POLL_MS = 500;
 const MS_PER_TICK = 1000 / SIM.tickRate;
-// After the fight ends (ms): the winning ball leaves the box, and lands on the loser's head.
-const FLIGHT = { start: 350, impact: 1350 };
-// The camera turns toward the loser for the hit, holds, and turns back (ms after the fight ends).
-const PAN = { in: 250, full: 900, hold: 2900, out: 3800 };
+// After the fight ends (ms): the winning ball stays on show alone in the box, then leaves it and lands on the
+// loser's head. Its way there: `out` of the flight pops it out of the box toward the camera, then it arcs up
+// `high` over the box's top and drops onto the head. (All inside the round's DUEL_TIMING.strikeMs.)
+const FLIGHT = { start: 1000, impact: 2300, out: 0.2, forward: 5, high: 9 };
+// The camera turns toward the loser as the ball flies, holds on the hit, and turns back (ms after the fight ends).
+const PAN = { in: 900, full: 1800, hold: 3600, out: 4300 };
 const OPEN_PHASES = new Set(['choose', 'aim', 'fight', 'over']);
 const HEART_LIFT = new THREE.Vector3(0, 1.9, 0); // hearts float this far over a duelling player's head
 const PROMPT_LIFT = 3.2; // the Join prompt floats this far over the character's head
@@ -97,7 +99,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     const position = character.group.position;
     for (const [arenaId, arena] of arenas) {
       // A full arena (two players waiting or duelling there) has no square to join.
-      if (arena.mode !== 'pads' || !arena.onStage(position) || arena.isFull()) continue;
+      if (!arena.onStage(position) || arena.isFull()) continue;
       prompt = { arenaId, spot: arena.spotAt(position) ?? arena.nearestSpot(position), arena };
       break;
     }
@@ -129,7 +131,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
   async function join(arenaId, spot) {
     if (seat) return;
     const arena = arenas.get(arenaId);
-    if (!arena || arena.mode !== 'pads') return;
+    if (!arena) return;
     const mySeat = { arenaId, spot, arena, host: null, fightView: fightViewOf(arenaId, arena), name: getPlayerName() };
     seat = mySeat;
     prompt = null;
@@ -232,7 +234,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     arena.setExpanded(false);
     seatWalk = 0;
     // Step off the square, toward the lane, and hand the camera back.
-    const off = arena.group.localToWorld(new THREE.Vector3(-arenaBase('pads')[0] / 2 - 3, 0, SIDES[spot].z));
+    const off = arena.group.localToWorld(new THREE.Vector3(-ARENA_BASE[0] / 2 - 3, 0, SIDES[spot].z));
     character.group.position.x = off.x;
     character.group.position.z = off.z;
     controls.clearCinematic(character.group.position.clone().setY(character.group.position.y + 4.2));
@@ -324,7 +326,9 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
   }
 
   const from = new THREE.Vector3();
-  const control = new THREE.Vector3();
+  const out = new THREE.Vector3();
+  const over = new THREE.Vector3();
+  const drop = new THREE.Vector3();
   const to = new THREE.Vector3();
   function stageStrike(now, fight) {
     if (strike.key !== roundKey) {
@@ -341,21 +345,34 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
       }
       const model = seat.fightView.takeStriker();
       if (model) scene.attach(model.group);
-      strike.flight = { model, from: model ? model.group.position.clone() : null, scale: model?.group.scale.x ?? 1 };
+      const start = model ? model.group.position.clone() : null;
+      // Out of the box's open face: toward the camera, level.
+      const forward = start ? camera.position.clone().sub(start).setY(0).normalize().multiplyScalar(FLIGHT.forward) : null;
+      strike.flight = { model, from: start, forward, scale: model?.group.scale.x ?? 1 };
     }
     loser?.headPosition(to);
     const t = clamp01((since - FLIGHT.start) / (FLIGHT.impact - FLIGHT.start));
     const { model } = strike.flight;
     if (model) {
-      // Out of the box and over in an arc, growing as it comes toward the camera, spinning.
       from.copy(strike.flight.from);
-      control.addVectors(from, to).multiplyScalar(0.5);
-      control.y += 6;
-      const u = t * t * (3 - 2 * t) * 0.6 + t * 0.4;
-      model.group.position.set(0, 0, 0)
-        .addScaledVector(from, (1 - u) * (1 - u))
-        .addScaledVector(control, 2 * u * (1 - u))
-        .addScaledVector(to, u * u);
+      out.copy(from).add(strike.flight.forward);
+      if (t < FLIGHT.out) {
+        // Pops out of the box.
+        model.group.position.lerpVectors(from, out, smooth(t / FLIGHT.out));
+      } else {
+        // Up over the box's top and down onto the head, speeding up as it falls.
+        const v = (t - FLIGHT.out) / (1 - FLIGHT.out);
+        const u = smooth(v) * 0.4 + v * v * 0.6;
+        const top = Math.max(out.y, to.y) + FLIGHT.high;
+        over.set(out.x, top, out.z);
+        drop.set(to.x, top, to.z);
+        const a = (1 - u) ** 3;
+        const b = 3 * u * (1 - u) ** 2;
+        const c = 3 * u * u * (1 - u);
+        model.group.position.set(0, 0, 0)
+          .addScaledVector(out, a).addScaledVector(over, b).addScaledVector(drop, c).addScaledVector(to, u ** 3);
+      }
+      // Growing as it comes toward the camera, spinning.
       model.group.scale.setScalar(strike.flight.scale * (1 + Math.sin(t * Math.PI) * 0.9));
       model.group.rotation.z -= 0.35;
     }

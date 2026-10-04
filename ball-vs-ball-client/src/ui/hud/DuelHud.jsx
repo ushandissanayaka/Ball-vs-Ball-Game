@@ -39,35 +39,85 @@ function PlayerBadge({ side, player }) {
   );
 }
 
+/**
+ * "Select Any Ball": every ball as a tile framed in its rarity's colour. Point at a tile to light it up, click
+ * to select it (double-click picks it straight away), scroll the wheel if they don't all fit; YES picks the
+ * selected ball, NO (or Escape) closes the window.
+ */
+function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
+  const [selected, setSelected] = useState(current);
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'Enter' && selected) onPick(selected);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, onPick, onClose]);
+  return (
+    <section className="all-balls-panel" role="dialog" aria-label="Select any ball">
+      <h2 className="all-balls-title">Select Any Ball - {secondsLeft}</h2>
+      <div className="all-balls-grid">
+        {BALL_IDS.map((id) => (
+          <button
+            type="button"
+            key={id}
+            className={`ball-tile ${BALLS[id].rarity}${selected === id ? ' selected' : ''}`}
+            title={BALLS[id].blurb}
+            onClick={() => setSelected(id)}
+            onDoubleClick={() => onPick(id)}
+          >
+            <span className="ball-tile-art"><BallIcon kind={id} className="ball-tile-icon" /></span>
+            <span className="ball-tile-name">{BALLS[id].name}</span>
+          </button>
+        ))}
+      </div>
+      <div className="all-balls-buttons">
+        <button type="button" className="all-balls-no outlined" onClick={onClose}>NO</button>
+        <button type="button" className="all-balls-yes outlined" disabled={!selected} onClick={() => onPick(selected)}>YES</button>
+      </div>
+    </section>
+  );
+}
+
 function ChoosePanel({ duel, gems, actions }) {
   const [showAll, setShowAll] = useState(false);
-  const balls = showAll ? BALL_IDS : duel.offers;
   const canReroll = !duel.chosen && !duel.local && gems >= duel.rerollCost;
+  const pick = (id) => {
+    actions.choose(id);
+    setShowAll(false);
+  };
   return (
     <>
       <div className="duel-dim" />
-      <h2 className="choose-title">CHOOSE YOUR BALL - {duel.secondsLeft}</h2>
-      <section className={`choose-cards${showAll ? ' all' : ''}`}>
-        {balls.map((id) => (
-          <button type="button" key={id} className={`ball-card${duel.chosen === id ? ' picked' : ''}`} onClick={() => actions.choose(id)}>
-            <span className="ball-card-name">{BALLS[id].name}</span>
-            <span className="ball-card-art"><BallIcon kind={id} className="ball-card-icon" /></span>
-            <span className="ball-card-blurb">{BALLS[id].blurb}</span>
-          </button>
-        ))}
-      </section>
-      {duel.chosen && <div className="duel-wait outlined">Waiting for opponent...</div>}
-      <section className="choose-actions">
-        <button type="button" className="all-balls" onClick={() => setShowAll(!showAll)}>
-          <span className="choose-tag free outlined">Free</span>
-          <span className="outlined">{showAll ? 'Offers' : 'All Balls'}</span>
-        </button>
-        <button type="button" className="reroll" disabled={!canReroll} onClick={actions.reroll}>
-          <span className="choose-tag gem outlined"><GemIcon className="reroll-gem" />{duel.rerollCost}</span>
-          <RefreshIcon className="reroll-icon" />
-          <span className="reroll-label outlined">Reroll</span>
-        </button>
-      </section>
+      {showAll ? (
+        <AllBallsPanel secondsLeft={duel.secondsLeft} current={duel.chosen} onPick={pick} onClose={() => setShowAll(false)} />
+      ) : (
+        <>
+          <h2 className="choose-title">CHOOSE YOUR BALL - {duel.secondsLeft}</h2>
+          <section className="choose-cards">
+            {duel.offers.map((id) => (
+              <button type="button" key={id} className={`ball-card${duel.chosen === id ? ' picked' : ''}`} onClick={() => actions.choose(id)}>
+                <span className="ball-card-name">{BALLS[id].name}</span>
+                <span className="ball-card-art"><BallIcon kind={id} className="ball-card-icon" /></span>
+                <span className="ball-card-blurb">{BALLS[id].blurb}</span>
+              </button>
+            ))}
+          </section>
+          {duel.chosen && <div className="duel-wait outlined">Waiting for opponent...</div>}
+          <section className="choose-actions">
+            <button type="button" className="all-balls" onClick={() => setShowAll(true)}>
+              <span className="choose-tag free outlined">Free</span>
+              <span className="outlined">All Balls</span>
+            </button>
+            <button type="button" className="reroll" disabled={!canReroll} onClick={actions.reroll}>
+              <span className="choose-tag gem outlined"><GemIcon className="reroll-gem" />{duel.rerollCost}</span>
+              <RefreshIcon className="reroll-icon" />
+              <span className="reroll-label outlined">Reroll</span>
+            </button>
+          </section>
+        </>
+      )}
     </>
   );
 }

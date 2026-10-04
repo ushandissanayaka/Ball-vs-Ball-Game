@@ -1,21 +1,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { arenaBase } from '../../config/layout.js';
+import { ARENA_BASE } from '../../config/layout.js';
 import { DUEL_BOX, LABEL, NEON, PROP } from '../../config/palette.js';
 import { additive, fadeTexture, haloTexture } from '../../effects/glowTextures.js';
 import { SIM } from '../../shared/duelSim.js';
 import { canvasTexture, createLabel } from '../../util/canvasText.js';
 import { glow, standard } from '../../util/materials.js';
-import { addMesh, block, box, sphere } from '../../util/mesh.js';
-
-// The two balls shown fighting on a match screen, by row. `spiky` gives the second ball white spikes.
-const MATCHUPS = [
-  ['#3fbf5a', '#e04646', true],
-  ['#f2c230', '#e04646', false],
-  ['#f07a2a', '#e04646', true],
-  ['#f4f6fb', '#9b59d6', false],
-  ['#2f86ea', '#ff7fbf', true],
-];
+import { addMesh, block, box } from '../../util/mesh.js';
 
 const PAD = 7;
 const TOP = 1.2;
@@ -43,6 +34,13 @@ const GROW = 1.35;
 const BOX_HALF = BOX.inner / 2 + BOX.frame;
 const SIDE_X = BOX.x - 1.2;
 const sideZ = (side) => Math.sign(SIDES[side].z) * (BOX_HALF * GROW + 2.4);
+/**
+ * Once the duel is on, each square rises off the floor and floats round its player beside the grown box (a
+ * little toward the lane, so the player stands at its far edge, as in the reference shot), `y` over the base,
+ * bobbing gently up and down.
+ */
+const HOVER = { x: SIDE_X - 2.6, out: 0.6, y: 2.2, arc: 1.6, bob: 0.25, speed: 1.8 };
+const hoverZ = (side) => sideZ(side) + Math.sign(SIDES[side].z) * HOVER.out;
 const smoothstep = (t) => t * t * (3 - 2 * t);
 const lerp = (a, b, t) => a + (b - a) * t;
 const SIM_SCALE = BOX.inner / SIM.size;
@@ -196,7 +194,7 @@ function addSpot(group, depth, side) {
   beam.renderOrder = 3;
   beam.visible = false;
   beam.userData.dynamic = true;
-  return { square, lit, gem: gemMesh, beam, home: z, gemZ };
+  return { square, lit, gem: gemMesh, beam, home: z, hoverZ: hoverZ(side) };
 }
 
 /**
@@ -276,33 +274,13 @@ function addBoard(group) {
   return { pivot, face, pictures, names, countdown, vs, fightLayer };
 }
 
-/** Match arena: the standing screen on the outer edge, facing the lane, with the two balls fighting on it. */
-function addMatchScreen(group, width, depth, row) {
-  const screen = new THREE.Group();
-  screen.position.set(width / 2 - 1.2, TOP, 0);
-  screen.rotation.y = -Math.PI / 2;
-  group.add(screen);
-  block(screen, [depth - 4, 0.8, 2.6], standard(PROP.boardStand, { roughness: 0.5 }));
-  block(screen, [depth - 2, 15, 1.6], standard(PROP.arenaFrame, { roughness: 0.45, metalness: 0.2 }), { position: [0, 0.8, 0] });
-  box(screen, [depth - 4, 12.8, 0.12], standard(PROP.arenaScreen, { roughness: 0.3, metalness: 0.1 }), { position: [0, 8.3, 0.82] });
-  const [colorA, colorB, spiky] = MATCHUPS[row % MATCHUPS.length];
-  sphere(screen, 1.7, standard(colorA, { roughness: 0.25 }), { position: [-4, 8.3, 2.3] });
-  sphere(screen, 1.7, standard(colorB, { roughness: 0.25 }), { position: [4, 8.3, 2.3] });
-  if (spiky) {
-    const spike = standard('#ffffff', { roughness: 0.3 });
-    for (const dy of [-0.6, 0.6]) {
-      addMesh(screen, new THREE.ConeGeometry(0.3, 1.4, 8), spike, { position: [2, 8.3 + dy, 2.3], rotation: [0, 0, Math.PI / 2] });
-    }
-  }
-}
-
 const easeOutBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
 const approach = (value, target, step) => (value < target ? Math.min(target, value + step) : Math.max(target, value - step));
 
 /**
- * One 1v1 arena on a runway deck: a dark square base with either player spots ('pads') or a fight screen
- * ('match'). Built for the east deck (lane to the west, -x); the west deck's arenas are the same turned half a
- * circle. Pads arenas also carry the duel box, and everything the duel director (scene/duel) moves:
+ * One 1v1 arena on a runway deck: a dark square base with the two player squares (pink and blue), their hex
+ * gems and the players label. Built for the east deck (lane to the west, -x); the west deck's arenas are the
+ * same turned half a circle. It also carries the duel box, and everything the duel director (scene/duel) moves:
  *   spotAt(worldPoint)            which square ('pink' / 'blue') a point stands on, or null
  *   onStage(worldPoint)           whether a point is on (or right at the edge of) this arena's base
  *   nearestSpot(worldPoint)       the square nearest a point ('pink' / 'blue')
@@ -324,10 +302,10 @@ const approach = (value, target, step) => (value < target ? Math.min(target, val
  *   update(dt)                    moves all of that; true while anything is moving
  *   setPlayers(players, capacity, reward), setLabelVisible(shown)   the floating players label
  */
-export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
+export function createDuelArena() {
   const group = new THREE.Group();
   group.name = 'duel-arena';
-  const [width, depth] = arenaBase(mode);
+  const [width, depth] = ARENA_BASE;
   block(group, [width, TOP, depth], standard(PROP.plinth, { roughness: 0.5 }));
   const trim = standard(PROP.plinthTrim, { roughness: 0.4 });
   const inset = 0.3;
@@ -336,11 +314,6 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
     [0.4, depth, -width / 2 + inset, 0], [0.4, depth, width / 2 - inset, 0],
   ]) {
     box(group, [w, 0.12, d], trim, { position: [x, TOP + 0.06, z], cast: false });
-  }
-
-  if (mode === 'match') {
-    addMatchScreen(group, width, depth, row);
-    return { group, mode, setPlayers: () => {}, spotAt: () => null, onStage: () => false, update: () => false };
   }
 
   const spots = { pink: addSpot(group, depth, 'pink'), blue: addSpot(group, depth, 'blue') };
@@ -394,6 +367,7 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
   let screen = 1; // 1 down (VS showing) .. 0 rolled up
   let screenTarget = 1;
   let beamLaunch = -1; // < 0: beams at rest; 0..1 shooting up; 1: gone
+  let hoverTime = 0; // seconds since the launch: the squares' bob
   const lit = { pink: false, blue: false };
 
   const setOccupants = (occupants, names = {}) => {
@@ -424,7 +398,11 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
   };
 
   const setScreenOpen = (open) => { screenTarget = open ? 0 : 1; };
-  const launchBeams = () => { if (beamLaunch < 0) beamLaunch = 0; };
+  const launchBeams = () => {
+    if (beamLaunch >= 0) return;
+    beamLaunch = 0;
+    hoverTime = 0;
+  };
   const resetBeams = () => {
     beamLaunch = -1;
     for (const [name, spot] of Object.entries(spots)) {
@@ -435,8 +413,7 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
       // The square back on the floor.
       spot.square.visible = true;
       spot.square.position.set(PAD_X, 0, spot.home);
-      spot.square.scale.setScalar(1);
-      spot.square.rotation.y = 0;
+      spot.square.rotation.set(0, 0, 0);
     }
   };
   const setExpanded = (on) => { growTarget = on ? 1 : 0; };
@@ -472,23 +449,27 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
       board.face.visible = screen > 0.002;
       moving = true;
     }
-    if (beamLaunch >= 0 && beamLaunch < 1) {
+    if (beamLaunch >= 0) {
       // The spotlights shoot up into the sky, stretching and fading as they go.
       beamLaunch = Math.min(1, beamLaunch + dt / 1.1);
+      hoverTime += dt;
       const t = beamLaunch;
+      // The square lifts off the floor, swoops up and over to its player beside the box and settles there,
+      // glowing and bobbing gently, for as long as the duel is on.
+      const up = smoothstep(Math.min(1, t * 1.25));
+      const y = up * HOVER.y + Math.sin(up * Math.PI) * HOVER.arc + Math.sin(hoverTime * HOVER.speed) * HOVER.bob * up;
       for (const [name, spot] of Object.entries(spots)) {
         spot.beam.visible = lit[name] && t < 1;
         spot.beam.position.y = 1 + t * t * 70;
         spot.beam.scale.set(1 - t * 0.5, 1 + t * 2.5, 1 - t * 0.5);
         spot.beam.material.opacity = 0.7 * (1 - t) + 0.5 * Math.sin(t * Math.PI);
-        // The square lifts off the floor and is drawn up into its spotlight, spinning and shrinking away.
-        const up = smoothstep(Math.min(1, t * 1.25));
-        spot.square.visible = t < 1;
-        spot.square.position.set(PAD_X, up * up * 26, lerp(spot.home, spot.gemZ, up));
-        spot.square.scale.setScalar(Math.max(0.001, 1 - up * 0.85));
-        spot.square.rotation.y = up * 2.4;
+        const phase = Math.sign(spot.home); // the two squares sway out of step
+        spot.square.position.set(lerp(PAD_X, HOVER.x, up), y, lerp(spot.home, spot.hoverZ, up));
+        spot.square.rotation.set(Math.sin(hoverTime * 1.3) * 0.04 * up * phase, 0, Math.cos(hoverTime * 1.1) * 0.05 * up);
       }
-      moving = true;
+      // Only the lift-off needs drawing for itself: the bob after it shows whenever the frame is drawn anyway
+      // (every frame of the player's own duel), so other players' duels don't keep the lobby redrawing.
+      if (t < 1) moving = true;
     }
     return moving;
   };
@@ -541,7 +522,7 @@ export function createDuelArena({ row = 0, mode = 'pads' } = {}) {
   const isFull = () => full;
   const setLabelVisible = (shown) => { label.visible = shown; };
   return {
-    group, mode, setPlayers, isFull, setLabelVisible, spotAt, onStage, nearestSpot, spotPose, setOccupants, setCountdown, setScreenOpen,
+    group, setPlayers, isFull, setLabelVisible, spotAt, onStage, nearestSpot, spotPose, setOccupants, setCountdown, setScreenOpen,
     launchBeams, resetBeams, setExpanded, expansion, expanding, fightLayer: board.fightLayer, simToLocal, pickSim, framing, update,
   };
 }

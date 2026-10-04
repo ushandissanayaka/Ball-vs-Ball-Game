@@ -3,9 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CAMERA } from '../config/layout.js';
 
 /**
- * Third-person camera round the player character: drag to orbit, wheel / pinch to zoom. `follow(point)` keeps
- * the orbit point on the character as it walks (the camera keeps its angle and distance), and the camera never
- * goes under the water. `view` ([x, y, z, tx, ty, tz], the ?cam= debug option) starts on a set view and stops
+ * Third-person camera round the player character: drag (left or right button) to orbit, wheel / pinch to zoom.
+ * `follow(point)` keeps the orbit point on the character as it walks (the camera keeps its angle and distance),
+ * and the camera never goes under the water. `view` ([x, y, z, tx, ty, tz], the ?cam= debug option) starts on a set view and stops
  * following, for screenshots. `setCinematic(position, target)` takes the camera off the player (a duel): it
  * glides to that shot and stays on it, following each new one; `clearCinematic(point)` hands it back, orbiting
  * `point`. `update(dt)` returns true when the view changed.
@@ -20,6 +20,12 @@ export function createCameraControls(camera, element, view = null) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.12;
   controls.enablePan = false; // the character is the centre of the view
+  // Either button turns the camera: drag with the left, or hold the right and move the mouse (as in Roblox).
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  // No browser menu on a right click anywhere in the game (the controls only stop it while they are enabled, and
+  // a right click also aims in a duel).
+  const noMenu = (event) => event.preventDefault();
+  element.addEventListener('contextmenu', noMenu);
   controls.minDistance = CAMERA.minDistance;
   controls.maxDistance = CAMERA.maxDistance;
   controls.maxPolarAngle = CAMERA.maxPolarAngle;
@@ -75,5 +81,9 @@ export function createCameraControls(camera, element, view = null) {
     return changed;
   };
 
-  return { update, follow, setCinematic, clearCinematic, dispose: () => controls.dispose() };
+  const dispose = () => {
+    element.removeEventListener('contextmenu', noMenu);
+    controls.dispose();
+  };
+  return { update, follow, setCinematic, clearCinematic, dispose };
 }

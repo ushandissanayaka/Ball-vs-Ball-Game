@@ -112,7 +112,6 @@ export function createArenaWatch({ scene, renderer, arenas, seatArenaId, myName 
         const arena = arenas.get(state.id);
         if (!arena) continue;
         arena.setPlayers(state.players, state.capacity, state.reward);
-        if (arena.mode !== 'pads') continue;
         const entry = entryOf(state.id);
         entry.occupants = state.occupants ?? null;
         // The server's launch time on our clock (already past once the countdown is over).
