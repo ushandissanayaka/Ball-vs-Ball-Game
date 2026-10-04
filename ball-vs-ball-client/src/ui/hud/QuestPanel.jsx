@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { formatClock } from '../../shared/constants.js';
+import { SEED_TRADE_PLAYERS } from '../../shared/lobbySeed.js';
 import { CoinIcon, HandshakeIcon, QuestIcon } from '../icons/Icons.jsx';
 
-/** Top-right: "Daily Quests" / "Trade" tabs and the daily quest list with its reset countdown. */
+/**
+ * Top-right: "Daily Quests" / "Trade" tabs: the daily quest list with its reset countdown, or the players to
+ * trade with (clicking one sends them a request).
+ */
 export default function QuestPanel({ quests, resetsAt, now }) {
   const [tab, setTab] = useState('quests');
+  const [requested, setRequested] = useState([]); // players sent a trade request (marked on the list)
   // Clicking the open tab again folds the panel away.
   const choose = (next) => setTab((current) => (current === next ? null : next));
   return (
@@ -42,9 +47,28 @@ export default function QuestPanel({ quests, resetsAt, now }) {
         </div>
       )}
       {tab === 'trade' && (
-        <div className="panel">
-          <h2 className="panel-title outlined">Trade</h2>
-          <p className="panel-note">No trade requests yet.</p>
+        <div className="trade-panel">
+          <div className="trade-requests">
+            <span>Trade Requests:</span>
+            <span className="trade-requests-slot" />
+            <button type="button" className="trade-close" onClick={() => setTab(null)}>CLOSE</button>
+          </div>
+          <div className="trade-hint">Click on a player to trade</div>
+          <div className="trade-header"><span>Player Name</span><span>Lv</span></div>
+          <div className="trade-list">
+            {SEED_TRADE_PLAYERS.map((player) => (
+              <button
+                type="button"
+                key={player.name}
+                className={`trade-row ${requested.includes(player.name) ? 'requested' : ''}`}
+                onClick={() => setRequested((list) => (list.includes(player.name) ? list : [...list, player.name]))}
+              >
+                <span className="trade-name">{player.name}</span>
+                <span className="trade-streak">{player.streak > 0 && <>🔥<b>{player.streak}</b></>}</span>
+                <span className="trade-level">{player.level}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </section>

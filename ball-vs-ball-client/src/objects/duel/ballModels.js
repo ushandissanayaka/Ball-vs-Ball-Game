@@ -436,9 +436,10 @@ const LOOKS = {
  * A ball of `kind`, `radius` sim units. Returns { group, setRadius(r), setHp(hp), setAxe(dx, dy),
  * setSpear(dx, dy, ext 0..1), setKnives(n), setHookReady(ready), setState({ frozen, webbed, burst, sick,
  * charge 0..1, transformed }), flash(), update(dt, time, vx, vy), showLabel(shown), dispose() }.
- * `group` sits at the ball's centre; the body inside it rolls as it moves.
+ * `group` sits at the ball's centre; the body inside it rolls as it moves. `thumbnail` leaves out the shadow on
+ * the box's wall and the HP label (for the HUD's ball pictures).
  */
-export function createBallModel(kind, radius) {
+export function createBallModel(kind, radius, { thumbnail = false } = {}) {
   const look = LOOKS[kind] ?? LOOKS.electric;
   const skin = skinOf(kind);
   const group = new THREE.Group();
@@ -648,5 +649,9 @@ export function createBallModel(kind, radius) {
   };
 
   setRadius(radius);
+  if (thumbnail) {
+    shadow.visible = false;
+    label.visible = false;
+  }
   return { group, kind, setRadius, setHp, setAxe, setSpear, setKnives, setHookReady, setState, flash, update, showLabel, dispose };
 }

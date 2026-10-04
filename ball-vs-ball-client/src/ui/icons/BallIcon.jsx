@@ -1,4 +1,6 @@
 import React, { useId } from 'react';
+import { useBallThumb } from '../thumbs.js';
+import { EXTRA_SHADES, EXTRA_VIEW, ExtraBehind, ExtraFront, ExtraMark, NO_SPHERE } from './catalogBalls.jsx';
 
 // The duel balls as HUD icons (inline SVG, drawn after the reference's ball pictures): a shaded sphere with a
 // dark outline and each kind's mark. `kind` 'unknown' is the grey "?" ball shown before a player's choice is
@@ -113,7 +115,7 @@ function Mark({ kind, id }) {
         <text x="50" y="68" textAnchor="middle" fontFamily="Michroma, Arial Black, sans-serif" fontSize="50" fill="#fff" stroke="#2a2e36" strokeWidth="5" paintOrder="stroke">?</text>
       );
     default:
-      return null;
+      return <ExtraMark kind={kind} />;
   }
 }
 
@@ -136,9 +138,12 @@ function VirusKnobs() {
 
 export default function BallIcon({ kind, className }) {
   const id = useId().replace(/:/g, '');
-  const [light, mid, dark] = SHADES[kind] ?? SHADES.unknown;
+  const thumb = useBallThumb(kind);
+  if (thumb) return <img className={`${className ?? ''} ball-thumb`} src={thumb} alt="" draggable="false" />;
+  const [light, mid, dark] = SHADES[kind] ?? EXTRA_SHADES[kind] ?? SHADES.unknown;
+  const sphere = !NO_SPHERE.has(kind);
   return (
-    <svg className={className} viewBox={VIEW[kind] ?? '0 0 100 100'} aria-hidden="true">
+    <svg className={className} viewBox={VIEW[kind] ?? EXTRA_VIEW[kind] ?? '0 0 100 100'} aria-hidden="true">
       <defs>
         <radialGradient id={`${id}-ball`} cx="38%" cy="34%" r="70%">
           <stop offset="0" stopColor={light} />
@@ -158,7 +163,24 @@ export default function BallIcon({ kind, className }) {
           <stop offset="1" stopColor="#b25cff" stopOpacity="0" />
         </radialGradient>
         <clipPath id={`${id}-clip`}><circle cx="50" cy="50" r="42" /></clipPath>
+        {/* Studio lighting over the sphere and its mark: a soft key light up and to the left, the far side
+            falling into shadow, and a bounce of light along the bottom rim. */}
+        <radialGradient id={`${id}-key`} cx="34%" cy="28%" r="58%">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.6" />
+          <stop offset="0.45" stopColor="#ffffff" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${id}-shade`} cx="42%" cy="38%" r="64%">
+          <stop offset="0.55" stopColor="#000000" stopOpacity="0" />
+          <stop offset="0.9" stopColor="#000000" stopOpacity="0.38" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.55" />
+        </radialGradient>
+        <linearGradient id={`${id}-bounce`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.7" stopColor="#bcd8ff" stopOpacity="0" />
+          <stop offset="1" stopColor="#bcd8ff" stopOpacity="0.28" />
+        </linearGradient>
       </defs>
+      <ExtraBehind kind={kind} />
       {kind === 'laser' && <circle cx="50" cy="50" r="47" fill="none" stroke="#d070ff" strokeWidth="6" opacity="0.6" />}
       {kind === 'virus' && <VirusKnobs />}
       {kind === 'spear' && (
@@ -183,8 +205,16 @@ export default function BallIcon({ kind, className }) {
           <path d="M54 -28 Q78 -24 75 -4 Q67 -12 54 -10 Z" fill="#e3e9f0" stroke="#4a5160" strokeWidth="2" strokeLinejoin="round" />
         </g>
       )}
-      <circle cx="50" cy="50" r="42" fill={`url(#${id}-ball)`} stroke="#0e1424" strokeWidth="3" />
-      <g clipPath={`url(#${id}-clip)`}><Mark kind={kind} id={id} /></g>
+      {sphere && <circle cx="50" cy="50" r="42" fill={`url(#${id}-ball)`} stroke="#0e1424" strokeWidth="3" />}
+      {sphere && (
+        <g clipPath={`url(#${id}-clip)`}>
+          <Mark kind={kind} id={id} />
+          <circle cx="50" cy="50" r="42" fill={`url(#${id}-shade)`} />
+          <circle cx="50" cy="50" r="42" fill={`url(#${id}-bounce)`} />
+          <circle cx="50" cy="50" r="42" fill={`url(#${id}-key)`} />
+        </g>
+      )}
+      <ExtraFront kind={kind} id={id} />
       {kind === 'vampire' && (
         <g fill="#f6f6f2" stroke="#3a0a0e" strokeWidth="2" strokeLinejoin="round">
           {/* Two fangs hanging under the ball. */}
@@ -192,7 +222,7 @@ export default function BallIcon({ kind, className }) {
           <path d="M56 86 L62 112 L67 84 Z" />
         </g>
       )}
-      <ellipse cx="36" cy="27" rx="11" ry="6" fill="#fff" opacity="0.3" transform="rotate(-25 36 27)" />
+      {sphere && <ellipse cx="34" cy="26" rx="9" ry="4.5" fill="#fff" opacity="0.75" transform="rotate(-30 34 26)" />}
     </svg>
   );
 }
