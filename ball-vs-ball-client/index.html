@@ -10,40 +10,108 @@
     <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Michroma&family=Source+Sans+3:wght@400;700;800&family=Nunito:wght@800;900&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" />
     <!-- Bloxity Legion SDK (pinned v1). The game also runs without it, e.g. in a local preview. -->
     <script src="https://sdk.bloxity.io/v1/legion-sdk.min.js" defer></script>
-    <!-- Plain-HTML loading screen: paints before any script arrives; src/ui/screens/loadingScreen.js moves its
-         bar and fades it out once the world is built. -->
+    <!-- Plain-HTML loading screen (the "joining" card): paints before any script arrives and has no animation.
+         src/ui/screens/loadingScreen.js removes it once the game has drawn its first frame. Sizes are in --s, one
+         pixel of the 1914 x 1006 reference, scaled to the screen. -->
     <style>
       #loading-screen {
-        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
-        background: radial-gradient(ellipse at 50% 35%, #4d9ef0, #1d5fb4 60%, #123f82);
-        font-family: "Righteous", "Arial Black", sans-serif; color: #fff; transition: opacity 0.4s ease;
-        --progress: 0.06;
+        --s: min(calc(100vw / 1914), calc(100vh / 1006));
+        position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: #b9bcc0;
+        font-family: "Montserrat", "Segoe UI", Arial, sans-serif; color: #fff;
       }
-      #loading-screen.done { opacity: 0; pointer-events: none; }
-      #loading-screen .title {
-        margin: 0; font-size: clamp(40px, 8vw, 96px); font-weight: 400; letter-spacing: 0.02em;
-        -webkit-text-stroke: clamp(6px, 1vw, 12px) #12203f; paint-order: stroke fill;
-        text-shadow: 0 6px 0 #12203f;
+      #loading-screen .backdrop { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); filter: blur(16px); }
+      #loading-screen .card {
+        position: absolute; left: 50%; top: 50%; width: min(calc(1124 * var(--s)), calc(100vw - 32px)); height: calc(292 * var(--s));
+        transform: translate(-50%, calc(-50% + 1 * var(--s))); background: rgba(52, 54, 58, 0.94); border-radius: calc(8 * var(--s));
       }
-      #loading-screen .title b { color: #ff6b6b; font-weight: 400; }
-      #loading-screen .bar {
-        width: min(80vw, 520px); height: 22px; margin: 28px auto 0; padding: 4px; box-sizing: border-box;
-        border: 3px solid #12203f; border-radius: 999px; background: #e9f2ff;
+      #loading-screen .thumb {
+        position: absolute; left: 50%; top: calc(-128 * var(--s)); width: calc(256 * var(--s)); height: calc(256 * var(--s));
+        transform: translateX(-50%); border-radius: calc(8 * var(--s)); overflow: hidden; display: block;
       }
-      #loading-screen .fill {
-        width: calc(var(--progress) * 100%); height: 100%; border-radius: 999px;
-        background: linear-gradient(#8ff0ff, #2a8cff); transition: width 0.3s ease;
+      #loading-screen .name {
+        position: absolute; left: 0; right: 0; top: calc(162 * var(--s)); margin: 0; text-align: center;
+        font-size: calc(30 * var(--s)); font-weight: 700; letter-spacing: 0.005em; line-height: 1.2;
       }
-      #loading-screen .status { margin-top: 14px; text-align: center; font-size: 18px; -webkit-text-stroke: 4px #12203f; paint-order: stroke fill; }
+      #loading-screen .maker {
+        position: absolute; left: 0; right: 0; top: calc(234 * var(--s)); display: flex; justify-content: center; align-items: center;
+        gap: calc(6 * var(--s)); font-size: calc(17 * var(--s)); color: #d8dadd; line-height: 1;
+      }
+      #loading-screen .maker svg { width: calc(15 * var(--s)); height: calc(15 * var(--s)); }
+      #loading-screen .status {
+        position: absolute; left: 0; right: 0; bottom: calc(16 * var(--s)); text-align: center;
+        font-size: max(10px, calc(11 * var(--s))); color: #d8dadd;
+      }
     </style>
   </head>
   <body>
-    <div id="loading-screen" role="status" aria-label="Loading Ball vs Ball">
-      <div>
-        <h1 class="title">Ball <b>vs</b> Ball</h1>
-        <div class="bar"><div class="fill"></div></div>
-        <div class="status">Starting up</div>
+    <div id="loading-screen" role="status" aria-label="Joining Ball VS Ball">
+      <!-- The blurred scene behind the card: a grinning yellow ball, a spiked red one, the arena's dark pillars. -->
+      <svg class="backdrop" viewBox="0 0 1914 1006" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <radialGradient id="ls-floor" cx="50%" cy="55%" r="60%"><stop offset="0" stop-color="#d6d8db" /><stop offset="1" stop-color="#9a9ea4" /></radialGradient>
+          <radialGradient id="ls-yellow" cx="40%" cy="30%" r="70%"><stop offset="0" stop-color="#fff7a0" /><stop offset="0.55" stop-color="#f2e21a" /><stop offset="1" stop-color="#b89a00" /></radialGradient>
+          <radialGradient id="ls-red" cx="45%" cy="28%" r="72%"><stop offset="0" stop-color="#ff5a5a" /><stop offset="0.55" stop-color="#d40c0c" /><stop offset="1" stop-color="#6a0000" /></radialGradient>
+        </defs>
+        <rect width="1914" height="1006" fill="url(#ls-floor)" />
+        <rect x="0" y="0" width="240" height="1006" fill="#2ad0ea" />
+        <rect x="1850" y="0" width="64" height="1006" fill="#2ad0ea" />
+        <rect x="240" y="0" width="95" height="1006" fill="#3c3f45" />
+        <rect x="1755" y="0" width="95" height="1006" fill="#3c3f45" />
+        <path d="M0 260 Q120 200 200 300 L210 900 Q100 960 0 900 Z" fill="#e8e8ea" />
+        <path d="M30 420 L180 440 L170 700 L20 680 Z" fill="#1e4a8a" />
+        <rect x="1060" y="380" width="70" height="460" rx="20" fill="#2a2c30" transform="rotate(-38 1095 610)" />
+        <circle cx="640" cy="215" r="265" fill="url(#ls-yellow)" />
+        <ellipse cx="560" cy="135" rx="18" ry="42" fill="#1a1a10" transform="rotate(-8 560 135)" />
+        <ellipse cx="700" cy="135" rx="18" ry="42" fill="#1a1a10" transform="rotate(8 700 135)" />
+        <path d="M460 185 Q620 360 770 240" fill="none" stroke="#1a1a10" stroke-width="22" stroke-linecap="round" />
+        <path d="M1210 650 L1100 690 L1220 720 Z M1200 790 L1100 800 L1220 850 Z" fill="#f4f4f4" />
+        <circle cx="1440" cy="790" r="290" fill="url(#ls-red)" />
+        <ellipse cx="1580" cy="680" rx="55" ry="80" fill="#ffffff" opacity="0.7" transform="rotate(-30 1580 680)" />
+      </svg>
+
+      <div class="card">
+        <!-- The game's picture, under the grey "waiting" hourglass. -->
+        <svg class="thumb" viewBox="0 0 256 256" aria-hidden="true">
+          <defs>
+            <linearGradient id="ls-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a8fe0" /><stop offset="1" stop-color="#bcdcf6" /></linearGradient>
+            <linearGradient id="ls-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfd4da" /><stop offset="1" stop-color="#9aa2ac" /></linearGradient>
+            <radialGradient id="ls-tred" cx="40%" cy="30%" r="70%"><stop offset="0" stop-color="#ff7a7a" /><stop offset="0.6" stop-color="#d81818" /><stop offset="1" stop-color="#7a0606" /></radialGradient>
+            <radialGradient id="ls-tyellow" cx="40%" cy="30%" r="70%"><stop offset="0" stop-color="#fff59a" /><stop offset="0.6" stop-color="#f2d81a" /><stop offset="1" stop-color="#b08a00" /></radialGradient>
+          </defs>
+          <rect width="256" height="256" fill="url(#ls-sky)" />
+          <g fill="#ffffff" opacity="0.9"><ellipse cx="200" cy="40" rx="30" ry="10" /><ellipse cx="220" cy="32" rx="18" ry="10" /><ellipse cx="60" cy="24" rx="22" ry="7" /></g>
+          <path d="M0 150 L256 120 L256 256 L0 256 Z" fill="url(#ls-ground)" />
+          <g stroke="#8a929c" stroke-width="1.2" opacity="0.7">
+            <path d="M0 175 L256 146 M0 205 L256 178 M0 240 L256 216" />
+            <path d="M40 146 L-10 256 M100 140 L70 256 M160 133 L150 256 M220 126 L230 256" />
+          </g>
+          <g stroke-linecap="round" opacity="0.85">
+            <path d="M-10 60 L70 82" stroke="#ff6a8a" stroke-width="16" /><path d="M-10 92 L60 104" stroke="#ff9ab0" stroke-width="10" />
+            <path d="M0 40 L70 66" stroke="#ffffff" stroke-width="5" />
+          </g>
+          <circle cx="98" cy="92" r="56" fill="url(#ls-tred)" />
+          <circle cx="182" cy="150" r="60" fill="url(#ls-tyellow)" />
+          <path d="M150 158 Q182 205 222 152 Q186 172 150 158 Z" fill="#1a1408" />
+          <path d="M156 160 L162 170 L168 163 L174 174 L180 164 L186 175 L192 164 L198 173 L204 162 L210 168 L216 156" fill="none" stroke="#ffffff" stroke-width="3" />
+          <path d="M160 130 L178 138 M204 138 L220 128" stroke="#1a1408" stroke-width="6" stroke-linecap="round" />
+          <ellipse cx="168" cy="140" rx="5" ry="6" fill="#1a1408" /><ellipse cx="210" cy="140" rx="5" ry="6" fill="#1a1408" />
+          <rect width="256" height="256" fill="#c4c6ca" opacity="0.32" />
+          <g fill="#e6e7e9">
+            <rect x="68" y="26" width="120" height="16" rx="4" />
+            <rect x="68" y="156" width="120" height="16" rx="4" />
+            <path d="M80 42 H176 V60 Q176 84 140 99 Q176 114 176 138 V156 H80 V138 Q80 114 116 99 Q80 84 80 60 Z" fill="none" stroke="#e6e7e9" stroke-width="12" />
+            <path d="M98 70 H158 Q152 86 128 96 Q104 86 98 70 Z" opacity="0.95" />
+            <path d="M128 112 Q156 124 160 148 H96 Q100 124 128 112 Z" />
+          </g>
+          <text x="128" y="234" text-anchor="middle" font-family="Montserrat, Arial Black, Arial" font-weight="900" font-size="58" fill="#e6e7e9" letter-spacing="-1">NOW!</text>
+        </svg>
+        <h1 class="name">Ball VS Ball</h1>
+        <div class="maker">
+          <span>LEGION</span>
+          <svg viewBox="0 0 16 16" aria-label="Verified"><rect width="16" height="16" rx="3" fill="#2d6ef0" /><path d="M4 8.2 L7 11 L12 5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </div>
       </div>
+      <div class="status">Joining server</div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
