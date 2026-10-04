@@ -23,28 +23,17 @@ export const RUNWAY = { startZ: 66, endZ: 340, laneHalf: 22, outerX: 62, tab: 14
 export const ARENA_ROWS = [100, 150, 200, 250, 300];
 export const ARENA_X = (RUNWAY.laneHalf + RUNWAY.outerX) / 2;
 /**
- * Arena base [width (x), depth (z)]. Pads arenas are a little wider: the two squares sit side by side on the
- * lane half and the duel box rises from the back half, as in the reference shots.
+ * Arena base [width (x), depth (z)]: every arena is the same, two player squares side by side on the lane half
+ * and the duel box rising from the back half (as in the reference shots), deep enough for the players to stand
+ * beside the grown box.
  */
-export const ARENA_BASE = [20, 22];
-export const PADS_ARENA_BASE = [24, 26]; // deep enough for the players to stand beside the grown box
-/**
- * What stands on each arena, north to south: 'pads' (two player squares, the players label, hex gems) or
- * 'match' (the standing screen the balls fight on), mixed as in the reference shots.
- */
-export const ARENA_MODES = {
-  W: ['pads', 'match', 'match', 'match', 'pads'],
-  E: ['pads', 'pads', 'match', 'match', 'match'],
-};
-
-/** The base size of an arena of `mode` ('pads' or 'match'). */
-export const arenaBase = (mode) => (mode === 'pads' ? PADS_ARENA_BASE : ARENA_BASE);
+export const ARENA_BASE = [24, 26];
 
 /** Dark blocks hanging under the deck: [x, z, width, depth], one under each arena. Nothing hangs under the hub. */
 export const SUPPORTS = {
   drop: 16,
   blocks: [
-    ...ARENA_ROWS.flatMap((z, row) => [[-ARENA_X, z, ...arenaBase(ARENA_MODES.W[row])], [ARENA_X, z, ...arenaBase(ARENA_MODES.E[row])]]),
+    ...ARENA_ROWS.flatMap((z) => [[-ARENA_X, z, ...ARENA_BASE], [ARENA_X, z, ...ARENA_BASE]]),
   ],
 };
 

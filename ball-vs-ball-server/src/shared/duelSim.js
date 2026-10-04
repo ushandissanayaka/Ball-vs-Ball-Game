@@ -17,14 +17,20 @@ const WALL_JITTER = 0.18; // wall bounces wobble a little, so no two balls can b
 // Every hit takes at least 1 and at most `MAX_HIT` off the 100 a ball starts on.
 const MAX_HIT = 5;
 const FREEZE_TICKS = 50;
-const BURN = { ticks: 180, every: 30, damage: 1 };
+// A Thief Ball heals by `share` of what its bumps take.
+const THIEF = { share: 0.5 };
+// A Burst Ball bursts every `every` ticks: much faster for a moment, and its bumps hit `power` times harder
+// for `ticks`.
+const BURST = { every: 120, ticks: 50, boost: 1.6, power: 2 };
+// A Spider Ball's bumps web the other ball: it moves at `speed` of its pace for `ticks`, and the spider's
+// bumps on a webbed ball take `power` times more.
+const WEB = { ticks: 120, speed: 0.5, power: 1.2 };
 const CHARGE = { rate: 1.5 / SIM.tickRate, max: 4 };
 // A Cell Ball swells as the fight goes on; when it dies it splits in two, and those in two again.
 const CELL = { grow: 0.5 / SIM.tickRate, maxRadius: 11 };
 const CELL_SPLITS = [null, { hp: 10, radius: 7.5, speed: 1.1 }, { hp: 5, radius: 5.5, speed: 1.2 }];
 // The axe swings 4 degrees a tick: cos and sin of 4 degrees, written out.
 const AXE = { cos: 0.9975640502598242, sin: 0.0697564737441253, reach: 7.5, blade: 4.6, damage: 5, cooldown: 18 };
-const TAIL = { every: 5, length: 10, damage: 2, cooldown: 24 };
 // Hits are not fixed: a ball bounced off a wall flies faster for a moment (`KICK`), and a bump does more the
 // harder the two balls meet (`IMPACT`: from a graze to a full-speed head-on crash). So where a player aims (off
 // a wall, straight at the other ball) changes how much every hit takes.
@@ -54,10 +60,10 @@ function unit(x, y, fallbackX = 1, fallbackY = 0) {
 /**
  * A fight between `pink` and `blue`, each { ball, aim: { x, y } }. Call `step()` once per tick until `over`;
  * then `winner` is 'pink' or 'blue'. `bodies` are the balls (cells add more as they split): { id, side, kind,
- * gen, x, y, vx, vy, r, hp, maxHp, alive, frozen, burn, charge, kick, transform, axe: [x, y], tail: [[x, y]...] }.
+ * gen, x, y, vx, vy, r, hp, maxHp, alive, frozen, webbed, burst, charge, kick, transform, axe: [x, y] }.
  * `orbs` are the Verity Ball's shots: { id, side, x, y, vx, vy, r, alive }.
  * With `record`, what happens is kept for the screen (`drain()` hands it over): hit (with its `power`), wall,
- * damage, shock, ignite, charged, axe, bite, transform, orb, split and death events, each with the tick and
+ * damage, shock, steal, burst, web, charged, axe, transform, orb, split and death events, each with the tick and
  * where it happened.
  */
 export function createFight({ seed, pink, blue }, { record = true } = {}) {
@@ -76,8 +82,8 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
       id: nextId++, side, kind, gen, x, y,
       base: stats.speed * speed, speed: stats.speed * speed, vx: 0, vy: 0,
       r: radius ?? stats.radius, hp: hp ?? stats.hp, maxHp: hp ?? stats.hp,
-      alive: true, frozen: 0, burn: 0, charge: 0, kick: 0, transform: 0,
-      axe: kind === 'axe' ? [0, 1] : null, tail: kind === 'snake' ? [] : null, cooldowns: {}, // the axe starts straight up
+      alive: true, frozen: 0, webbed: 0, burst: 0, charge: 0, kick: 0, transform: 0,
+      axe: kind === 'axe' ? [0, 1] : null, cooldowns: {}, // the axe starts straight up
     };
     body.vx = ux * body.speed;
     body.vy = uy * body.speed;
@@ -92,12 +98,14 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
 
   const enemiesOf = (body) => bodies.filter((other) => other.alive && other.side !== body.side);
 
-  function hurt(target, raw, extra = {}) {
-    if (!target.alive || raw <= 0) return;
+  /** Takes `raw` (rounded, 1..MAX_HIT) off `target`; returns how much it took. */
+  function hurt(target, raw) {
+    if (!target.alive || raw <= 0) return 0;
     const amount = Math.min(MAX_HIT, Math.max(1, Math.round(raw)));
     target.hp -= amount;
-    emit({ type: 'damage', id: target.id, amount, x: target.x, y: target.y, ...extra });
-    if (target.kind === 'verity' && !extra.burn && target.hp > 0 && target.transform === 0 && rand() < VERITY.chance) transform(target);
+    emit({ type: 'damage', id: target.id, amount, x: target.x, y: target.y });
+    if (target.kind === 'verity' && target.hp > 0 && target.transform === 0 && rand() < VERITY.chance) transform(target);
+    return amount;
   }
 
   /** A Verity Ball transforms: grim for a while, and a ring of orbs bursts out of it. */
@@ -141,7 +149,7 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
   }
 
   function keepSpeed(body) {
-    body.speed = body.base * (1 + body.kick);
+    body.speed = body.base * (1 + body.kick) * (body.webbed > 0 ? WEB.speed : 1);
     const [ux, uy] = unit(body.vx, body.vy, body.side === 'pink' ? 1 : -1, 0);
     body.vx = ux * body.speed;
     body.vy = uy * body.speed;
@@ -166,10 +174,23 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
       case 'cell':
         hurt(defender, attacker.gen === 0 ? base : base * 0.7);
         break;
-      case 'fire':
-        hurt(defender, base);
-        defender.burn = BURN.ticks;
-        emit({ type: 'ignite', id: defender.id, x: defender.x, y: defender.y });
+      case 'thief': {
+        const taken = hurt(defender, base);
+        const healed = Math.min(attacker.maxHp - attacker.hp, taken * THIEF.share);
+        if (healed > 0 && attacker.hp > 0) {
+          attacker.hp += healed;
+          emit({ type: 'steal', id: attacker.id, from: defender.id, amount: healed, x: attacker.x, y: attacker.y });
+        }
+        break;
+      }
+      case 'burst':
+        hurt(defender, attacker.burst > 0 ? base * BURST.power : base);
+        break;
+      case 'spider':
+        hurt(defender, defender.webbed > 0 ? base * WEB.power : base);
+        defender.webbed = WEB.ticks;
+        keepSpeed(defender);
+        emit({ type: 'web', id: defender.id, x: defender.x, y: defender.y });
         break;
       default:
         hurt(defender, base);
@@ -260,37 +281,24 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
     }
   }
 
-  function bite(body) {
-    if (fight.tick % TAIL.every === 0) {
-      body.tail.unshift([body.x, body.y]);
-      if (body.tail.length > TAIL.length) body.tail.pop();
-    }
-    for (const enemy of enemiesOf(body)) {
-      if ((body.cooldowns[enemy.id] ?? 0) > fight.tick) continue;
-      // The first segments sit under the head itself.
-      for (let i = 2; i < body.tail.length; i += 1) {
-        const [x, y] = body.tail[i];
-        const reach = enemy.r + body.r * (0.75 - i * 0.04);
-        if (sq(enemy.x - x) + sq(enemy.y - y) >= reach * reach) continue;
-        body.cooldowns[enemy.id] = fight.tick + TAIL.cooldown;
-        emit({ type: 'bite', id: body.id, x, y });
-        hurt(enemy, TAIL.damage);
-        break;
-      }
-    }
-  }
-
   function tickTimers(body) {
     if (body.kind === 'cell' && body.gen === 0 && body.r < CELL.maxRadius) body.r = Math.min(CELL.maxRadius, body.r + CELL.grow);
     if (body.kind === 'charge') body.charge = Math.min(CHARGE.max, body.charge + CHARGE.rate);
     if (body.transform > 0) body.transform -= 1;
+    if (body.burst > 0) body.burst -= 1;
+    if (body.kind === 'burst' && fight.tick % BURST.every === 0) {
+      body.burst = BURST.ticks;
+      body.kick = Math.max(body.kick, BURST.boost);
+      keepSpeed(body);
+      emit({ type: 'burst', id: body.id, x: body.x, y: body.y });
+    }
     if (body.kick > 0) {
       body.kick = body.kick < 0.01 ? 0 : body.kick * KICK.keep;
       keepSpeed(body);
     }
-    if (body.burn > 0) {
-      body.burn -= 1;
-      if (body.burn % BURN.every === 0) hurt(body, BURN.damage, { burn: true });
+    if (body.webbed > 0) {
+      body.webbed -= 1;
+      if (body.webbed === 0) keepSpeed(body);
     }
   }
 
@@ -363,7 +371,6 @@ export function createFight({ seed, pink, blue }, { record = true } = {}) {
     for (const body of live) {
       if (!body.alive) continue;
       if (body.axe) swingAxe(body);
-      if (body.tail) bite(body);
       bounceOffWalls(body);
     }
     settleDeaths();

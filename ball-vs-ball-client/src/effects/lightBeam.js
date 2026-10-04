@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { CAMERA } from '../config/layout.js';
 import { mulberry32 } from '../util/random.js';
+import { createBillboardCloud } from './billboards.js';
 import { additive, dotTexture, fadeTexture } from './glowTextures.js';
 
 /**
@@ -21,18 +23,14 @@ export function createLightBeam({ length = 20, radius = 7, color = '#f2e9ff', op
 /** A small cloud of still sparkles around `center` (for the projector's "explosion"). */
 export function createSparkles({ count = 26, spread = 4, size = 1.4, color = '#ffffff', seed = 3, map = dotTexture() } = {}) {
   const rand = mulberry32(seed);
-  const positions = new Float32Array(count * 3);
+  // `size` is in a PointsMaterial's units (what these once were): the billboards come out the same size.
+  const cloud = createBillboardCloud(count, { map, color, size: size * Math.tan(THREE.MathUtils.degToRad(CAMERA.fov) / 2), bounds: spread * 1.5 });
   for (let i = 0; i < count; i += 1) {
-    positions[i * 3] = (rand() - 0.5) * spread * 2;
-    positions[i * 3 + 1] = (rand() - 0.5) * spread * 1.4;
-    positions[i * 3 + 2] = (rand() - 0.5) * spread * 2;
+    cloud.offsets[i * 3] = (rand() - 0.5) * spread * 2;
+    cloud.offsets[i * 3 + 1] = (rand() - 0.5) * spread * 1.4;
+    cloud.offsets[i * 3 + 2] = (rand() - 0.5) * spread * 2;
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const material = new THREE.PointsMaterial({
-    map, color, size, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-  });
-  const points = new THREE.Points(geometry, material);
-  points.renderOrder = 4;
-  return points;
+  cloud.commit();
+  cloud.mesh.renderOrder = 4;
+  return cloud.mesh;
 }

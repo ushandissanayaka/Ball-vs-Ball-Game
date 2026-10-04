@@ -1,6 +1,8 @@
 import * as THREE from 'three';
+import { CAMERA } from '../config/layout.js';
 import { DUEL_FX } from '../config/palette.js';
 import { numberTexture } from '../objects/duel/ballModels.js';
+import { createBillboardCloud } from './billboards.js';
 import { dotTexture, starTexture } from './glowTextures.js';
 import { createParticleField, puffTexture, shardTexture } from './smokeParticles.js';
 
@@ -62,20 +64,13 @@ export function createFightFx(layer) {
   const bolts = spritePool(layer, 10, () => new THREE.SpriteMaterial({ map: boltTexture(), color: '#9fe8ff', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
   const rings = spritePool(layer, 8, () => new THREE.SpriteMaterial({ map: ringTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
 
-  // Sparks: one Points cloud, positions and colours rewritten each frame.
+  // Sparks: one billboard cloud, places and colours rewritten each frame.
   const MAX_SPARKS = 220;
-  const positions = new Float32Array(MAX_SPARKS * 3);
-  const colors = new Float32Array(MAX_SPARKS * 3);
-  const sparkGeometry = new THREE.BufferGeometry();
-  sparkGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  sparkGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const sparkMaterial = new THREE.PointsMaterial({
-    size: 0.32, map: starTexture(), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-  });
-  const sparkCloud = new THREE.Points(sparkGeometry, sparkMaterial);
-  sparkCloud.frustumCulled = false;
-  sparkCloud.renderOrder = 13;
-  layer.add(sparkCloud);
+  const sparkCloud = createBillboardCloud(MAX_SPARKS, { map: starTexture(), size: 0.32 * Math.tan(THREE.MathUtils.degToRad(CAMERA.fov) / 2) });
+  const { offsets: positions, colors } = sparkCloud;
+  sparkCloud.mesh.renderOrder = 13;
+  sparkCloud.commit(0);
+  layer.add(sparkCloud.mesh);
   const sparks = [];
   const color = new THREE.Color();
 
@@ -166,19 +161,17 @@ export function createFightFx(layer) {
       colors.set([spark.r * fade, spark.g * fade, spark.b * fade], n * 3);
       n += 1;
     }
-    sparkGeometry.setDrawRange(0, n);
-    sparkGeometry.attributes.position.needsUpdate = true;
-    sparkGeometry.attributes.color.needsUpdate = true;
+    sparkCloud.commit(n);
     return active || n > 0;
   };
 
   const clear = () => {
     for (const item of [...numbers, ...bolts, ...rings]) item.sprite.visible = false;
     sparks.length = 0;
-    sparkGeometry.setDrawRange(0, 0);
+    sparkCloud.commit(0);
   };
 
-  return { spawnNumber, spawnSparks, spawnBolt, spawnRing, update, clear, damageColor: DUEL_FX.damage, burnColor: DUEL_FX.burn };
+  return { spawnNumber, spawnSparks, spawnBolt, spawnRing, update, clear, damageColor: DUEL_FX.damage, healColor: DUEL_FX.heal };
 }
 
 /**

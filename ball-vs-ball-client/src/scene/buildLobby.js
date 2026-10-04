@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA_BASE, ARENA_MODES, ARENA_ROWS, ARENA_X, FLOOR_Y, MASCOTS, PROPS, arenaBase } from '../config/layout.js';
+import { ARENA_BASE, ARENA_ROWS, ARENA_X, FLOOR_Y, MASCOTS, PROPS } from '../config/layout.js';
 import { NeonBuilder } from '../effects/neon.js';
 import { createHub } from '../objects/platform/HubPlatform.js';
 import { createRunway } from '../objects/platform/Runway.js';
@@ -70,13 +70,10 @@ export function buildLobby() {
   const arenas = new Map();
   ARENA_ROWS.forEach((z, row) => {
     for (const [side, x, turn] of [['W', -ARENA_X, Math.PI], ['E', ARENA_X, 0]]) {
-      const arena = createDuelArena({ row, mode: ARENA_MODES[side][row] });
+      const arena = createDuelArena();
       root.add(place(arena.group, [x, z], FLOOR_Y, turn));
       arenas.set(`${side}${row + 1}`, arena);
-      const [baseWidth, baseDepth] = arenaBase(arena.mode);
-      walkArea.addStep(arena.group, baseWidth / 2, baseDepth / 2, 1.2);
-      // Match arenas' standing screens, along the base's outer edge.
-      if (arena.mode === 'match') for (const dz of [-8, -3, 3, 8]) walkArea.addObstacle(arena.group, 2.4, [ARENA_BASE[0] / 2 - 1.2, dz]);
+      walkArea.addStep(arena.group, ARENA_BASE[0] / 2, ARENA_BASE[1] / 2, 1.2);
     }
   });
 

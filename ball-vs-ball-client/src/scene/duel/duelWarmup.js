@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { createFightFx } from '../../effects/duelFx.js';
-import { createBallModel, createTailSegment } from '../../objects/duel/ballModels.js';
+import { createBallModel } from '../../objects/duel/ballModels.js';
 import { createAimArrow, createOrb } from '../../objects/duel/fightView.js';
 import { BALL_IDS } from '../../shared/balls.js';
 
 /**
- * One of everything that only appears mid-duel (every ball, the Verity Ball's grim face, a snake tail
- * segment, an orb, the aim arrow, the hit effects), for warming up the renderer: see `warmUpRenderer`. Keep the
+ * One of everything that only appears mid-duel (every ball, the Verity Ball's grim face, an orb, the aim
+ * arrow, the hit effects), for warming up the renderer: see `warmUpRenderer`. Keep the
  * group in the scene, hidden, afterwards: dropping it would let WebGL throw the compiled shaders away again once
  * no material uses them.
  */
@@ -16,13 +16,12 @@ export function createDuelWarmup() {
   for (const kind of BALL_IDS) {
     const model = createBallModel(kind, 7);
     model.setHp(100);
-    model.setState({ frozen: true, burning: true, charge: 1, transformed: false });
+    model.setState({ frozen: true, webbed: true, burst: true, charge: 1, transformed: false });
     group.add(model.group);
   }
   const grim = createBallModel('verity', 7);
-  grim.setState({ frozen: false, burning: false, charge: 0, transformed: true });
+  grim.setState({ frozen: false, webbed: false, burst: false, charge: 0, transformed: true });
   group.add(grim.group);
-  group.add(createTailSegment().mesh);
   group.add(createOrb().group);
   group.add(createAimArrow().group);
   createFightFx(group);
@@ -30,13 +29,16 @@ export function createDuelWarmup() {
 }
 
 /**
- * Draws one frame with everything in the scene shown and nothing culled, through `draw` (the game's own render
- * path, so the shaders come out exactly as the game will use them), then puts it all back. The first time a
+ * Draws one frame with everything in the scene shown and nothing culled, then puts it all back. The first time a
  * material, texture or mesh is drawn, WebGL compiles its shader and uploads its data there and then, which can
  * freeze the game for a moment (shader compiles on Windows especially): this does all of that once, behind the
  * loading screen, instead of mid-duel. The baked sun shadows are left alone.
+ * Every shader comes in two versions: one drawing straight to the screen (no bloom) and one drawing into the
+ * bloom pass's HDR buffer. The quality (so whether bloom is on) can change after this runs (the player's saved
+ * setting arrives a moment later), so both are made: through `draw` (the game's own path, bloom's passes and
+ * all), straight to the screen, and into a small HDR target like bloom's.
  */
-export function warmUpRenderer(renderer, scene, draw) {
+export function warmUpRenderer(renderer, scene, camera, draw) {
   const shown = [];
   const unculled = [];
   scene.traverse((object) => {
@@ -52,6 +54,12 @@ export function warmUpRenderer(renderer, scene, draw) {
   const shadowsDue = renderer.shadowMap.needsUpdate;
   renderer.shadowMap.needsUpdate = false;
   draw();
+  renderer.render(scene, camera);
+  const hdr = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
+  renderer.setRenderTarget(hdr);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  hdr.dispose();
   renderer.shadowMap.needsUpdate = shadowsDue;
   for (const object of shown) object.visible = false;
   for (const object of unculled) object.frustumCulled = true;

@@ -3,7 +3,7 @@ import { BALLS } from '../../shared/balls.js';
 import { START, createFight } from '../../shared/duelSim.js';
 import { createFightFx } from '../../effects/duelFx.js';
 import { dotTexture } from '../../effects/glowTextures.js';
-import { createBallModel, createTailSegment } from './ballModels.js';
+import { createBallModel } from './ballModels.js';
 
 const MAX_CATCH_UP = 900; // ticks per frame at most, when a fight is joined late or the tab was hidden
 
@@ -76,7 +76,6 @@ export function createFightView(arena) {
   const layer = arena.fightLayer;
   const fx = createFightFx(layer);
   const models = new Map(); // body id (or 'pink' / 'blue' while lined up) -> model
-  const tails = new Map(); // snake body id -> tail segments
   const flown = new Set(); // bodies whose model has left the box (the striker)
   const orbs = new Map(); // Verity orb id -> orb
   const spareOrbs = []; // orbs that have hit something, kept to be used again (no new materials mid-fight)
@@ -85,6 +84,9 @@ export function createFightView(arena) {
   layer.add(arrow.group);
   let fight = null;
   let fightKey = null;
+  // A fight always leaves one ball in the box: when the winner's last ball went down with the loser's, that
+  // ball stays on show anyway (it is the one that flies out at the loser).
+  let survivor = null;
   let mySide = null;
   const at = new THREE.Vector3();
 
@@ -96,8 +98,6 @@ export function createFightView(arena) {
   const dropModel = (id) => {
     models.get(id)?.dispose();
     models.delete(id);
-    for (const segment of tails.get(id) ?? []) segment.dispose();
-    tails.delete(id);
   };
 
   const dropOrb = (id) => {
@@ -115,6 +115,7 @@ export function createFightView(arena) {
     flown.clear();
     fight = null;
     fightKey = null;
+    survivor = null;
     arrow.group.visible = false;
   };
 
@@ -158,7 +159,7 @@ export function createFightView(arena) {
     for (const body of fight.bodies) {
       if (flown.has(body.id)) continue;
       let model = models.get(body.id);
-      if (!body.alive) {
+      if (!body.alive && body.id !== survivor) {
         if (model) dropModel(body.id);
         continue;
       }
@@ -166,28 +167,13 @@ export function createFightView(arena) {
         model = createBallModel(body.kind, body.r);
         layer.add(model.group);
         models.set(body.id, model);
-        if (body.tail) tails.set(body.id, []);
       }
       if (body.kind === 'cell') model.setRadius(body.r);
       place(model, body.x, body.y, body.r);
-      model.setHp(body.hp);
+      model.setHp(body.id === survivor ? Math.max(1, body.hp) : body.hp);
       if (body.axe) model.setAxe(body.axe[0], body.axe[1]);
-      model.setState({ frozen: body.frozen > 0, burning: body.burn > 0, charge: body.charge / 4, transformed: body.transform > 0 });
+      model.setState({ frozen: body.frozen > 0, webbed: body.webbed > 0, burst: body.burst > 0, charge: body.charge / 4, transformed: body.transform > 0 });
       model.userData = { vx: body.frozen > 0 ? 0 : body.vx, vy: body.frozen > 0 ? 0 : body.vy };
-      if (body.tail) {
-        const segments = tails.get(body.id);
-        while (segments.length < body.tail.length) {
-          const segment = createTailSegment();
-          layer.add(segment.mesh);
-          segments.push(segment);
-        }
-        body.tail.forEach(([x, y], i) => {
-          const r = body.r * (0.75 - i * 0.04);
-          segments[i].mesh.scale.setScalar(r);
-          arena.simToLocal(x, y, r, segments[i].mesh.position);
-          segments[i].mesh.position.z = model.group.position.z - 0.5;
-        });
-      }
     }
     for (const orb of fight.orbs) {
       if (!orb.alive) {
@@ -220,14 +206,24 @@ export function createFightView(arena) {
         models.get(event.b)?.flash();
         break;
       case 'damage':
-        fx.spawnNumber(`-${event.amount}`, event.burn ? fx.burnColor : fx.damageColor, event.x, event.y + (body?.r ?? 7) + 3, z(body));
+        fx.spawnNumber(`-${event.amount}`, fx.damageColor, event.x, event.y + (body?.r ?? 7) + 3, z(body));
         break;
       case 'shock':
         fx.spawnBolt(event.x, event.y, z(body));
         fx.spawnSparks(event.x, event.y, z(body), '#7fdcff', 14, 60);
         break;
-      case 'ignite':
-        fx.spawnSparks(event.x, event.y, z(body), '#ff8a2a', 14, 45);
+      case 'steal':
+        // The stolen health rises off the thief in green.
+        fx.spawnNumber(`+${event.amount}`, fx.healColor, event.x, event.y + (body?.r ?? 7) + 3, z(body));
+        fx.spawnSparks(event.x, event.y, z(body), '#b9c0ff', 10, 40);
+        break;
+      case 'burst':
+        fx.spawnRing(event.x, event.y, 10, '#ffb020', 30);
+        fx.spawnSparks(event.x, event.y, 10, '#ffd23a', 16, 65);
+        break;
+      case 'web':
+        fx.spawnRing(event.x, event.y, z(body), '#ffffff', 22);
+        fx.spawnSparks(event.x, event.y, z(body), '#f4f4f4', 10, 30);
         break;
       case 'charged':
         fx.spawnRing(event.x, event.y, 10, '#7ff8ff', 34);
@@ -235,9 +231,6 @@ export function createFightView(arena) {
         break;
       case 'axe':
         fx.spawnSparks(event.x, event.y, 10, '#ffe2b0', 10, 50);
-        break;
-      case 'bite':
-        fx.spawnSparks(event.x, event.y, 8, '#ffffff', 6, 35);
         break;
       case 'wall':
         if (body && body.speed > body.base * 1.3) fx.spawnSparks(event.x, event.y, z(body), '#dbe8ff', 5, 30);
@@ -268,7 +261,13 @@ export function createFightView(arena) {
       fight.step();
       steps += 1;
     }
-    const events = fight.drain();
+    if (fight.over && survivor === null) {
+      const winners = fight.bodies.filter((body) => body.side === fight.winner);
+      // The one still on screen went down last (the others' models were dropped as they died).
+      if (!winners.some((body) => body.alive)) survivor = (winners.find((body) => models.has(body.id)) ?? winners.at(-1))?.id ?? null;
+    }
+    // The survivor's own death (it went down with the loser) isn't shown: it is still standing.
+    const events = fight.drain().filter((event) => !(event.type === 'death' && event.id === survivor));
     // Catching up after a long gap: only the last moments' effects are worth showing.
     for (const event of events) if (fight.tick - event.tick < 30) show(event);
     sync();
@@ -277,13 +276,14 @@ export function createFightView(arena) {
   const takeStriker = () => {
     if (!fight?.winner) return null;
     let best = null;
-    for (const body of fight.bodies) if (body.alive && body.side === fight.winner && (!best || body.hp > best.hp)) best = body;
+    for (const body of fight.bodies) {
+      const standing = body.alive || body.id === survivor;
+      if (standing && body.side === fight.winner && (!best || body.hp > best.hp)) best = body;
+    }
     const model = best && models.get(best.id);
     if (!model) return null;
     models.delete(best.id);
     flown.add(best.id);
-    for (const segment of tails.get(best.id) ?? []) segment.dispose();
-    tails.delete(best.id);
     model.showLabel(false);
     return model;
   };

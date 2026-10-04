@@ -82,7 +82,7 @@ export const DUEL_BOX = {
 /** Duel effects: damage numbers, the smoke that bursts round a player hit by the winning ball. */
 export const DUEL_FX = {
   damage: '#ff2a2a',
-  burn: '#ff9a1f',
+  heal: '#5cff4a',
   smoke: '#16181f',
   smokeLight: '#2c303b',
   ember: '#ff8a2a',
