@@ -81,7 +81,8 @@ export default function App() {
         world.applyLobby(next);
       }, LOBBY_REFRESH_MS);
 
-      hideLoadingScreen();
+      await hideLoadingScreen();
+      if (disposed) return;
       loadingEnd();
       gameplayStart();
       // The HUD's ball pictures, from the 3D balls (the drawn icons stand in until each is ready).

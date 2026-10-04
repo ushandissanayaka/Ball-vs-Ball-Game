@@ -1,22 +1,14 @@
 import { loadingStep } from '../../bloxity/sdk.js';
 
-// Drives the plain-HTML loading screen in index.html (and reports each step to the Bloxity portal too).
-let progress = 0.06;
+// Drives the plain-HTML loading screen in index.html. Each step is reported to the Bloxity portal; the screen
+// itself just says "Joining server", as in the reference, and has no animation.
 
-export function showLoadingStep(message, value) {
+export function showLoadingStep(message) {
   loadingStep(message);
-  const screen = document.getElementById('loading-screen');
-  if (!screen) return;
-  progress = Math.max(progress, value);
-  screen.style.setProperty('--progress', progress.toFixed(3));
-  const status = screen.querySelector('.status');
-  if (status) status.textContent = message;
 }
 
-export function hideLoadingScreen() {
-  const screen = document.getElementById('loading-screen');
-  if (!screen) return;
-  screen.style.setProperty('--progress', '1');
-  screen.classList.add('done');
-  setTimeout(() => screen.remove(), 500);
+/** Takes the loading screen away at once, after the game has drawn a frame (so it never flashes empty). */
+export async function hideLoadingScreen() {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  document.getElementById('loading-screen')?.remove();
 }
