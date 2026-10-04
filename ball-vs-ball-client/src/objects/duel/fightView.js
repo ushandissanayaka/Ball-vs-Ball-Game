@@ -4,6 +4,7 @@ import { START, createFight } from '../../shared/duelSim.js';
 import { createFightFx } from '../../effects/duelFx.js';
 import { dotTexture } from '../../effects/glowTextures.js';
 import { createBallModel } from './ballModels.js';
+import { createFightProps } from './fightProps.js';
 
 const MAX_CATCH_UP = 900; // ticks per frame at most, when a fight is joined late or the tab was hidden
 
@@ -62,8 +63,8 @@ export function createOrb() {
 
 /**
  * Everything inside the duel box: the two balls lined up while players aim, the fight itself (the shared
- * simulation run in step with the server's clock), the hit effects, and the winning ball handed over for its
- * flight out of the box.
+ * simulation run in step with the server's clock) with what the balls throw and leave about (fightProps), the
+ * hit effects, and the winning ball handed over for its flight out of the box.
  *   lineup({ pink, blue }, mySide)  both balls at their starting spots, my arrow on mine
  *   setAim({ x, y })                points my arrow
  *   start(fight)                    begins showing `fight` ({ setup, ticks, winner }); same fight: no-op
@@ -75,6 +76,7 @@ export function createOrb() {
 export function createFightView(arena) {
   const layer = arena.fightLayer;
   const fx = createFightFx(layer);
+  const props = createFightProps(layer);
   const models = new Map(); // body id (or 'pink' / 'blue' while lined up) -> model
   const flown = new Set(); // bodies whose model has left the box (the striker)
   const orbs = new Map(); // Verity orb id -> orb
@@ -112,6 +114,7 @@ export function createFightView(arena) {
     for (const id of [...models.keys()]) dropModel(id);
     for (const id of [...orbs.keys()]) dropOrb(id);
     fx.clear();
+    props.clear();
     flown.clear();
     fight = null;
     fightKey = null;
@@ -132,6 +135,7 @@ export function createFightView(arena) {
       model.setHp(BALLS[kind].hp);
       model.showLabel(false);
       if (kind === 'axe') model.setAxe(0, 1); // straight up, as the fight starts it
+      if (kind === 'spear') model.setSpear(s === 'pink' ? 1 : -1, 0, 0); // at the other ball, as the fight starts it
       layer.add(model.group);
       models.set(s, model);
       place(model, START[s][0], START[s][1], BALLS[kind].radius);
@@ -172,7 +176,13 @@ export function createFightView(arena) {
       place(model, body.x, body.y, body.r);
       model.setHp(body.id === survivor ? Math.max(1, body.hp) : body.hp);
       if (body.axe) model.setAxe(body.axe[0], body.axe[1]);
-      model.setState({ frozen: body.frozen > 0, webbed: body.webbed > 0, burst: body.burst > 0, charge: body.charge / 4, transformed: body.transform > 0 });
+      if (body.spear) model.setSpear(body.spear.dx, body.spear.dy, body.spear.ext);
+      if (body.kind === 'thief') model.setKnives(body.knives);
+      if (body.kind === 'hook') model.setHookReady(!body.hookOut);
+      model.setState({
+        frozen: body.frozen > 0, webbed: body.webbed > 0, burst: body.burst > 0, sick: body.poison > 0 || body.virusTicks > 0,
+        charge: body.charge / 4, transformed: body.transform > 0,
+      });
       model.userData = { vx: body.frozen > 0 ? 0 : body.vx, vy: body.frozen > 0 ? 0 : body.vy };
     }
     for (const orb of fight.orbs) {
@@ -190,6 +200,7 @@ export function createFightView(arena) {
       arena.simToLocal(orb.x, orb.y, orb.r, shown.group.position);
       shown.r = orb.r;
     }
+    props.sync(fight, models);
   };
 
   const byId = (id) => fight.bodies.find((body) => body.id === id);
@@ -216,6 +227,28 @@ export function createFightView(arena) {
         // The stolen health rises off the thief in green.
         fx.spawnNumber(`+${event.amount}`, fx.healColor, event.x, event.y + (body?.r ?? 7) + 3, z(body));
         fx.spawnSparks(event.x, event.y, z(body), '#b9c0ff', 10, 40);
+        break;
+      case 'snag':
+        fx.spawnSparks(event.x, event.y, z(body), '#cfe2ff', 8, 30);
+        break;
+      case 'poison':
+        fx.spawnSparks(event.x, event.y, z(body), '#5dff3a', 10, 35);
+        break;
+      case 'infect':
+        fx.spawnRing(event.x, event.y, z(body), '#5dff3a', 20 + event.stacks * 6);
+        break;
+      case 'zap':
+        fx.spawnSparks(event.x, event.y, z(body), '#ff6df8', 12, 50);
+        break;
+      case 'laser':
+        fx.spawnRing(event.x, event.y, 10, '#d070ff', 26);
+        break;
+      case 'knife':
+      case 'latch':
+        fx.spawnSparks(event.x, event.y, z(body), '#e8eef6', 10, 45);
+        break;
+      case 'bite':
+        fx.spawnSparks(event.x, event.y, 8, '#ffffff', 6, 35);
         break;
       case 'burst':
         fx.spawnRing(event.x, event.y, 10, '#ffb020', 30);

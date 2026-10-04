@@ -6,7 +6,7 @@ import { createRunway } from '../objects/platform/Runway.js';
 import { createSupportBlocks } from '../objects/platform/SupportBlocks.js';
 import { createLeaderboard } from '../objects/props/Leaderboard.js';
 import { createPortal2v2 } from '../objects/props/Portal2v2.js';
-import { createHexPedestal, createInfoPedestal } from '../objects/props/Pedestals.js';
+import { createHexPedestal } from '../objects/props/Pedestals.js';
 import { createFlyersDisplay } from '../objects/props/FlyersDisplay.js';
 import { createExplosionsProjector } from '../objects/props/ExplosionsProjector.js';
 import { createBallsMachine } from '../objects/props/BallsMachine.js';
@@ -44,7 +44,6 @@ export function buildLobby() {
     [createFlyersDisplay(), PROPS.flyers],
     [createExplosionsProjector(), PROPS.explosions],
     [createBallsMachine(), PROPS.balls],
-    [createInfoPedestal(), PROPS.infoPedestal],
   ];
   for (const [group, { position, rotation }] of stations) root.add(place(group, position, FLOOR_Y, rotation));
 
@@ -55,12 +54,11 @@ export function buildLobby() {
   const walkArea = createWalkArea();
   for (const board of [allTime.group, weekly.group]) for (const x of [-16, -6, 6, 16]) walkArea.addObstacle(board, 5, [x, 0]);
   for (const spot of root.children.filter((child) => child.name === 'hex-pedestal')) walkArea.addObstacle(spot, 5);
-  const [portal, flyers, explosions, balls, info] = stations.map(([group]) => group);
+  const [portal, flyers, explosions, balls] = stations.map(([group]) => group);
   walkArea.addObstacle(portal, 8.5);
   walkArea.addObstacle(flyers, 7.5);
   walkArea.addObstacle(explosions, 7);
   for (const x of [-6.5, 6.5]) walkArea.addObstacle(balls, 7, [x, 0]);
-  walkArea.addObstacle(info, 4.5);
   for (const x of [-5.5, 5.5]) walkArea.addObstacle(shop.group, 7.5, [x, 0]);
   shop.setEndsIn(formatDayHour(nextLimitedOfferEnd(now) - now));
   // What moves on its own, for the "is it on screen?" check: room round the shop's show (bike, smoke column,

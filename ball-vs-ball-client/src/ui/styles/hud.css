@@ -14,17 +14,29 @@
 }
 .hud button, .hud section, .hud nav > * { pointer-events: auto; }
 .hud button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; border: 0; padding: 0; background: none; }
-/* Buttons feel alive: they rise a little under the pointer, and lift and pop when clicked. */
-.hud button { transition: transform 0.15s ease, filter 0.15s ease; }
-.hud button:hover { transform: translateY(calc(-3 * var(--u))); filter: brightness(1.1); }
-.hud button.pop { animation: button-pop 0.32s ease-out; }
-@keyframes button-pop {
-  0% { transform: translateY(0) scale(1); }
-  35% { transform: translateY(calc(-9 * var(--u))) scale(1.08); }
-  70% { transform: translateY(calc(1 * var(--u))) scale(0.97); }
-  100% { transform: translateY(calc(-3 * var(--u))) scale(1); }
+/* Buttons feel alive (every HUD button): under the pointer a button grows a little and lifts toward the player,
+   brighter, its shadow spreading under it, with a springy overshoot; pressed it sinks back, and a click pops it.
+   Only `scale`, `translate` and the button's own filter move: they are separate from the `transform` some buttons
+   use to sit in place, and nothing outside the button is redrawn, so the game never feels it. */
+.hud button {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: scale 0.22s var(--spring), translate 0.22s var(--spring), filter 0.2s ease;
 }
-@media (prefers-reduced-motion: reduce) { .hud button.pop { animation: none; } }
+.hud button:hover:not(:disabled) {
+  scale: 1.08; translate: 0 calc(-4 * var(--u));
+  filter: brightness(1.12) drop-shadow(0 calc(8 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.4));
+}
+.hud button:active:not(:disabled) { scale: 0.96; translate: 0 0; transition-duration: 0.07s; }
+/* The pop has no end frame: it settles on whatever the button shows then (grown while still pointed at). */
+.hud button.pop { animation: button-pop 0.36s var(--spring); }
+@keyframes button-pop {
+  0% { scale: 0.94; }
+  45% { scale: 1.14; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud button { transition: none; }
+  .hud button.pop { animation: none; }
+}
 
 .outlined { -webkit-text-stroke: calc(3.5 * var(--u)) var(--ink); paint-order: stroke fill; }
 
@@ -222,10 +234,65 @@
   background: linear-gradient(#e30d0d, #c80000 60%, #b00000) !important; border: calc(3 * var(--u)) solid #3a0606 !important;
   -webkit-text-stroke: calc(6 * var(--u)) var(--ink) !important;
 }
-.queue-note {
-  position: absolute; bottom: 100%; margin-bottom: calc(10 * var(--u)); white-space: nowrap;
-  font-size: calc(22 * var(--u)); -webkit-text-stroke: calc(3 * var(--u)) var(--ink);
+
+/* ---- Invite Friends window (as on the Bloxity portal): plain dark panel, system font ------------------ */
+.invite-backdrop {
+  position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; letter-spacing: 0; animation: dim-in 0.2s ease both;
 }
+.invite-modal {
+  --iu: min(var(--u), calc(100vh / 760)); box-sizing: border-box; display: flex; flex-direction: column;
+  width: min(calc(800 * var(--iu)), calc(100vw - 32px)); height: calc(624 * var(--iu)); padding: 0 calc(23 * var(--iu)) calc(16 * var(--iu));
+  background: #141416; border-radius: calc(8 * var(--iu)); box-shadow: 0 calc(20 * var(--iu)) calc(60 * var(--iu)) rgba(0, 0, 0, 0.6);
+  color: #fff; animation: card-in 0.25s ease-out both;
+}
+.invite-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: calc(66 * var(--iu)); }
+.invite-title { margin: 0; font-size: calc(17 * var(--iu)); font-weight: 600; }
+.hud .invite-close { justify-self: start; width: calc(30 * var(--iu)); height: calc(30 * var(--iu)); display: grid; place-items: center; color: #e8e8ea; }
+.invite-close-icon { width: calc(20 * var(--iu)); height: calc(20 * var(--iu)); }
+.hud .invite-copy { justify-self: end; font-size: calc(16.5 * var(--iu)); font-weight: 600; color: #4f8cff; }
+.hud .invite-close:hover, .hud .invite-copy:hover, .hud .invite-link-row:hover { filter: brightness(1.25); }
+.invite-search {
+  display: flex; align-items: center; gap: calc(8 * var(--iu)); height: calc(38 * var(--iu)); padding: 0 calc(10 * var(--iu));
+  border: 1px solid #2c2c31; border-radius: calc(6 * var(--iu)); background: #18181b; color: #d4d4d8; pointer-events: auto;
+}
+.invite-search:focus-within { border-color: #4f8cff; }
+.invite-search-icon { width: calc(16 * var(--iu)); height: calc(16 * var(--iu)); flex: none; }
+.invite-search input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: #fff; font: inherit; font-size: calc(13.5 * var(--iu));
+}
+.invite-search input::placeholder { color: #d4d4d8; }
+.hud .invite-link-row {
+  display: flex; align-items: center; gap: calc(12 * var(--iu)); margin-top: calc(11 * var(--iu)); text-align: left;
+  font-size: calc(16.5 * var(--iu)); font-weight: 600; color: #e6e6ea;
+}
+.invite-link-badge { width: calc(56 * var(--iu)); height: calc(56 * var(--iu)); border-radius: 50%; display: grid; place-items: center; background: #2a2b31; flex: none; }
+.invite-link-icon { width: calc(24 * var(--iu)); height: calc(24 * var(--iu)); color: #d8d8dd; }
+.invite-list { flex: 1; min-height: 0; overflow-y: auto; margin-top: calc(10 * var(--iu)); scrollbar-width: thin; scrollbar-color: #3a3a40 transparent; }
+.invite-empty, .invite-status {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0;
+  font-size: calc(16.5 * var(--iu)); color: #d4d4d8;
+}
+.invite-empty p { margin: calc(14 * var(--iu)) 0 calc(60 * var(--iu)); }
+.invite-empty-icon { width: calc(46 * var(--iu)); height: calc(46 * var(--iu)); color: #fff; }
+.invite-friend { display: flex; align-items: center; gap: calc(12 * var(--iu)); padding: calc(8 * var(--iu)) calc(2 * var(--iu)); }
+.invite-avatar {
+  position: relative; width: calc(48 * var(--iu)); height: calc(48 * var(--iu)); border-radius: 50%; flex: none;
+  display: grid; place-items: center; background: #2a2b31; overflow: visible;
+}
+.invite-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.invite-initial { font-size: calc(20 * var(--iu)); font-weight: 600; }
+.invite-avatar.online::after {
+  content: ""; position: absolute; right: 0; bottom: 0; width: 26%; height: 26%; border-radius: 50%;
+  background: #3ad16b; box-shadow: 0 0 0 calc(3 * var(--iu)) #141416;
+}
+.invite-friend-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: calc(16 * var(--iu)); font-weight: 600; overflow: hidden; }
+.invite-friend-name small { font-size: calc(12.5 * var(--iu)); font-weight: 400; color: #a1a1aa; }
+.hud .invite-send {
+  padding: calc(7 * var(--iu)) calc(18 * var(--iu)); border-radius: calc(6 * var(--iu)); background: #4f8cff;
+  font-size: calc(14 * var(--iu)); font-weight: 600; color: #fff;
+}
+.hud .invite-send:disabled { background: #2a2b31; color: #a1a1aa; cursor: default; }
 
 /* ---- Touch thumb stick (bottom right); hidden where there is a mouse ------------------------------- */
 .joystick {
@@ -249,11 +316,11 @@
 /* ---- Duel: Join prompt over an arena square -------------------------------------------------------- */
 .hud .join-prompt {
   position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: calc(16 * var(--u));
+  transform-origin: 0 0; /* the point it hangs from (over the square): growing on hover keeps it centred there */
   height: calc(64 * var(--u)); padding: 0 calc(30 * var(--u)) 0 calc(12 * var(--u)); border-radius: calc(10 * var(--u));
   background: rgba(38, 42, 50, 0.82); box-shadow: 0 calc(4 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.3);
   font: 700 calc(26 * var(--u)) var(--body); letter-spacing: 0; animation: prompt-in 0.2s ease-out;
 }
-.hud .join-prompt:hover { transform: translate(-50%, -100%) scale(1.05); }
 .hud .join-prompt.pop { animation: none; }
 .join-key {
   display: grid; place-items: center; width: calc(44 * var(--u)); height: calc(44 * var(--u)); border-radius: 50%;
@@ -296,6 +363,7 @@
   font: calc(30 * var(--u)) "Righteous", var(--display); white-space: nowrap; letter-spacing: 0;
   -webkit-text-stroke: calc(5 * var(--u)) var(--ink); animation: heart-in 0.3s ease-out both;
 }
+.badge-ball-name.long { font-size: calc(19 * var(--u)); } /* "Poison Spike Ball", as in the reference */
 .badge-ball-icon { width: calc(104 * var(--u)); height: calc(104 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.35)); }
 
 /* ---- Duel: choosing a ball (the world dims behind the cards) ------------------------------------------ */
@@ -362,7 +430,7 @@
 }
 .hud .all-balls { width: calc(286 * var(--cu)); font-size: calc(34 * var(--cu)); }
 .hud .reroll { width: calc(150 * var(--cu)); display: grid; place-items: center; }
-.hud .reroll:disabled { filter: grayscale(0.45) brightness(0.8); cursor: default; transform: none; }
+.hud .reroll:disabled { filter: grayscale(0.45) brightness(0.8); cursor: default; }
 .choose-tag { position: absolute; display: flex; align-items: center; gap: calc(4 * var(--cu)); font-size: calc(30 * var(--cu)); line-height: 1; }
 .choose-tag.free { left: calc(26 * var(--cu)); top: calc(-24 * var(--cu)); color: #8fa0ff; }
 .choose-tag.gem { left: calc(-44 * var(--cu)); top: calc(-28 * var(--cu)); }
@@ -394,7 +462,7 @@
 }
 .hud .ball-tile.epic { --frame: #b45cff; }
 .hud .ball-tile.legendary { --frame: #ffa81a; }
-.hud .ball-tile:hover { transform: translateY(calc(-3 * var(--cu))); filter: brightness(1.18); box-shadow: 0 0 calc(14 * var(--cu)) var(--frame); }
+.hud .ball-tile:hover { filter: brightness(1.18); box-shadow: 0 0 calc(14 * var(--cu)) var(--frame); }
 .hud .ball-tile.selected {
   border-color: #ffffff; filter: brightness(1.2);
   box-shadow: 0 0 0 calc(3 * var(--cu)) var(--frame), 0 0 calc(22 * var(--cu)) var(--frame);
@@ -406,6 +474,7 @@
   font: 900 calc(25 * var(--cu)) / 1.1 var(--body); letter-spacing: 0; white-space: nowrap; color: #fff;
   -webkit-text-stroke: calc(4 * var(--cu)) #0b0d14; paint-order: stroke fill;
 }
+.ball-tile-name.long { font-size: calc(19 * var(--cu)); padding: calc(3 * var(--cu)) 0 calc(4 * var(--cu)); } /* "Poison Spike Ball" */
 .all-balls-buttons { display: flex; justify-content: center; gap: calc(114 * var(--cu)); padding-top: calc(10 * var(--cu)); }
 .hud .all-balls-no, .hud .all-balls-yes {
   width: calc(312 * var(--cu)); height: calc(76 * var(--cu)); font-size: calc(46 * var(--cu)); letter-spacing: 0;
@@ -413,7 +482,7 @@
 }
 .hud .all-balls-no { background: linear-gradient(#ff1010, #c80000); border: calc(2 * var(--cu)) solid #5a0000; }
 .hud .all-balls-yes { background: linear-gradient(#3fe04a, #1f9f2a); border: calc(2 * var(--cu)) solid #0c3d10; }
-.hud .all-balls-yes:disabled { background: linear-gradient(#9a9a9a, #6e6e6e); border-color: #2a2a2a; cursor: default; transform: none; filter: none; }
+.hud .all-balls-yes:disabled { background: linear-gradient(#9a9a9a, #6e6e6e); border-color: #2a2a2a; cursor: default; }
 
 /* ---- Duel: aiming --------------------------------------------------------------------------------- */
 .aim-title {
@@ -431,7 +500,7 @@
   background: linear-gradient(#ffc61f, #f6a200 60%, #e08800); border: calc(3 * var(--u)) solid #3a2600;
   -webkit-text-stroke: calc(6 * var(--u)) var(--ink);
 }
-.hud .lock-aim:disabled { background: linear-gradient(#8f949e, #6b707a); cursor: default; transform: none; }
+.hud .lock-aim:disabled { background: linear-gradient(#8f949e, #6b707a); cursor: default; }
 
 /* ---- Duel: FIGHT! and the result -------------------------------------------------------------------- */
 .fight-banner {

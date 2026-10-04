@@ -70,3 +70,36 @@ export function getInviteLink() {
     return window.location.href;
   }
 }
+
+/**
+ * The player's Bloxity friends, for the Invite Friends window: [{ id, name, avatarUrl, online }] (empty when
+ * signed out or without the SDK). The SDK hands them over as the portal or the API gives them, so the fields
+ * are read whichever way they come.
+ */
+export async function getFriends() {
+  try {
+    const list = (await sdk()?.social?.getFriends?.()) ?? [];
+    return list
+      .map((friend) => {
+        const user = friend.user ?? friend.friend ?? friend;
+        return {
+          id: user.id ?? user.userId ?? friend.userId ?? friend.id,
+          name: String(user.displayName || user.username || user.name || 'Friend'),
+          avatarUrl: user.avatarUrl || user.headshotUrl || user.avatar || user.profilePictureUrl || null,
+          online: Boolean(user.isOnline ?? user.online ?? (user.status ? user.status === 'online' : false)),
+        };
+      })
+      .filter((friend) => friend.id != null);
+  } catch {
+    return [];
+  }
+}
+
+/** Sends `friendId` an invite to this game through the portal; resolves true when it went. */
+export async function inviteFriend(friendId) {
+  try {
+    return Boolean(await sdk()?.social?.inviteFriend?.(friendId));
+  } catch {
+    return false;
+  }
+}
