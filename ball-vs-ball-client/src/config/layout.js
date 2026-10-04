@@ -62,7 +62,6 @@ export const PROPS = {
   explosions: { position: [38, -20], rotation: -0.95 },
   balls: { position: [32, 27], rotation: -2.3 },
   limitedShop: { position: [-32, 30], rotation: 2.25 },
-  infoPedestal: { position: [11, 44], rotation: 0 },
 };
 
 /** The slightly darker floor panel in the open middle of the hub: [minX, minZ, maxX, maxZ]. */

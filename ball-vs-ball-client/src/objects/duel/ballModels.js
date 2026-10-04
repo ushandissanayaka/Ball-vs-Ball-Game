@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BALLS } from '../../shared/balls.js';
 import { dotTexture } from '../../effects/glowTextures.js';
 import { canvasTexture, DISPLAY_FONT } from '../../util/canvasText.js';
@@ -7,7 +8,8 @@ import { mulberry32 } from '../../util/random.js';
 /*
  * The 3D balls that fight in the duel box. Each is a lit sphere wearing a painted skin (an equirectangular
  * canvas: the ball's front, which faces the camera, is at a quarter of the way across), with a glow map for
- * the parts that shine, plus what makes its kind: the axe it swings, a jelly membrane, a burst's glow.
+ * the parts that shine, plus what makes its kind: the axe it swings, its spear, fangs, virus knobs, the thief's
+ * knives, a jelly membrane, a burst's glow.
  * They live in the box's fight layer, so sizes and positions are in duel-simulation units (radius ~7).
  */
 
@@ -140,8 +142,12 @@ function paintSkin(kind) {
       circle(g, CX - 16, CY - 14, 36, '#2c5f18');
       break;
     case 'axe':
-      // The glowing seam: a crescent down the right side of the face.
-      for (const [ctx, width, stroke] of [[g, 26, '#ff4a00'], [c, 12, '#ff9a3a'], [g, 10, '#ffc070']]) {
+    case 'spear':
+    case 'hook': {
+      // The glowing seam: a crescent down the right side of the face (orange on the axe, green on the spear,
+      // yellow on the hook).
+      const seam = { axe: ['#ff4a00', '#ff9a3a', '#ffc070'], spear: ['#2aff2a', '#7dff5a', '#c6ff9a'], hook: ['#ffb000', '#ffd23a', '#fff09a'] }[kind];
+      for (const [ctx, width, stroke] of [[g, 26, seam[0]], [c, 12, seam[1]], [g, 10, seam[2]]]) {
         ctx.lineCap = 'round';
         ctx.lineWidth = width;
         ctx.strokeStyle = stroke;
@@ -150,6 +156,36 @@ function paintSkin(kind) {
         ctx.quadraticCurveTo(CX + 52, CY, CX + 30, SKIN_H - 14);
         ctx.stroke();
       }
+      break;
+    }
+    case 'laser': {
+      // Deep violet, glowing all over and brightest in the middle of the face.
+      const core = g.createRadialGradient(CX, CY, 4, CX, CY, 120);
+      core.addColorStop(0, '#d9a8ff');
+      core.addColorStop(0.5, '#5a1aa0');
+      core.addColorStop(1, '#3a0d70');
+      g.fillStyle = core;
+      g.fillRect(0, 0, SKIN_W, SKIN_H);
+      break;
+    }
+    case 'virus':
+      // Darker green blotches.
+      for (let i = 0; i < 26; i += 1) circle(c, rand() * SKIN_W, rand() * SKIN_H, 5 + rand() * 12, 'rgba(20, 90, 25, 0.35)');
+      break;
+    case 'snake':
+      for (const side of [-1, 1]) {
+        c.fillStyle = '#121212';
+        c.beginPath();
+        c.ellipse(CX + side * 21, CY - 14, 11, 15, 0, 0, Math.PI * 2);
+        c.fill();
+        circle(c, CX + side * 21 + 3, CY - 19, 4.5, '#ffffff');
+      }
+      c.fillStyle = '#121212';
+      c.beginPath();
+      c.moveTo(CX - 40, CY + 8);
+      c.quadraticCurveTo(CX, CY + 64, CX + 40, CY + 8);
+      c.quadraticCurveTo(CX, CY + 30, CX - 40, CY + 8);
+      c.fill();
       break;
     case 'thief': {
       // A dark mask across the face, its knot at the left, and one bright slanted eye in it on the right.
@@ -235,6 +271,86 @@ function webTexture() {
   return webCanvasTexture;
 }
 
+/** The Spear Ball's spear: a long wooden shaft along +x with a steel head, its tip at `x = 0` (moved out to reach). */
+function spearModel() {
+  const group = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 22, 8), new THREE.MeshStandardMaterial({ color: '#6b4325', roughness: 0.7 }));
+  shaft.rotation.z = -Math.PI / 2;
+  shaft.position.x = -11 - 3.4;
+  group.add(shaft);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(1.9, 5.5, 4), new THREE.MeshStandardMaterial({ color: '#d8e0ea', roughness: 0.25, metalness: 0.85 }));
+  head.rotation.z = -Math.PI / 2;
+  head.position.x = -2.75;
+  group.add(head);
+  return group;
+}
+
+/** Two white fangs under a Vampire Ball (unit size: scaled with the ball). */
+function fangsModel() {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color: '#f6f6f2', roughness: 0.3 });
+  for (const side of [-1, 1]) {
+    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.5, 8), material);
+    fang.rotation.z = Math.PI; // pointing down
+    fang.position.set(side * 0.3, -1.05, 0.45);
+    group.add(fang);
+  }
+  return group;
+}
+
+let knobsGeometry = null;
+/** The Virus Ball's knobs: short stalks with round tips all over a unit sphere, in one geometry. */
+function virusKnobs() {
+  if (knobsGeometry) return knobsGeometry;
+  const corners = new THREE.IcosahedronGeometry(1, 0).getAttribute('position');
+  const seen = new Set();
+  const parts = [];
+  const dir = new THREE.Vector3();
+  const upAxis = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < corners.count; i += 1) {
+    dir.fromBufferAttribute(corners, i).normalize();
+    const key = dir.toArray().map((n) => n.toFixed(2)).join();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const turn = new THREE.Quaternion().setFromUnitVectors(upAxis, dir);
+    parts.push(
+      new THREE.CylinderGeometry(0.07, 0.07, 0.32, 6).applyQuaternion(turn).translate(dir.x * 1.12, dir.y * 1.12, dir.z * 1.12),
+      new THREE.SphereGeometry(0.13, 8, 6).translate(dir.x * 1.3, dir.y * 1.3, dir.z * 1.3),
+    );
+  }
+  knobsGeometry = mergeGeometries(parts);
+  return knobsGeometry;
+}
+
+/** A small knife (blade up), for the ones a Thief Ball carries over its head. */
+function knifeModel(material) {
+  const group = new THREE.Group();
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 3.4);
+  shape.lineTo(0.75, 0.4);
+  shape.lineTo(0, 0);
+  shape.lineTo(-0.75, 0.4);
+  shape.closePath();
+  const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: false }), material);
+  blade.position.z = -0.15;
+  group.add(blade);
+  return group;
+}
+
+/** The Hook Ball's hook on a short chain, hanging ready over the ball while it isn't thrown. */
+function readyHookModel() {
+  const group = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: '#9aa3b2', roughness: 0.3, metalness: 0.8 });
+  const chain = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.2, 0.5), new THREE.MeshStandardMaterial({ color: '#2b2f38', roughness: 0.5, metalness: 0.6 }));
+  chain.position.y = 1.6;
+  group.add(chain);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.38, 6, 12, Math.PI * 1.3), steel);
+  hook.position.y = 4.2;
+  hook.rotation.z = Math.PI * 0.85;
+  group.add(hook);
+  return group;
+}
+
 /** The axe an Axe Ball swings: a wooden handle out from the ball and a steel head, edge leading the swing. */
 function axeModel(radius) {
   const group = new THREE.Group();
@@ -307,12 +423,19 @@ const LOOKS = {
   thief: { roughness: 0.3, metalness: 0.05, glow: 1.6, coat: 1 },
   burst: { roughness: 0.3, metalness: 0, glow: 0.35, coat: 1 },
   spider: { roughness: 0.34, metalness: 0.05, glow: 0, coat: 1 },
+  laser: { roughness: 0.25, metalness: 0.1, glow: 1.4, coat: 1 },
+  spear: { roughness: 0.3, metalness: 0.45, glow: 2.2, coat: 0.8 },
+  hook: { roughness: 0.3, metalness: 0.45, glow: 2.2, coat: 0.8 },
+  vampire: { roughness: 0.3, metalness: 0, glow: 0, coat: 1 },
+  poison: { roughness: 0.3, metalness: 0, glow: 0, coat: 1 },
+  virus: { roughness: 0.35, metalness: 0, glow: 0, coat: 0.8 },
+  snake: { roughness: 0.45, metalness: 0, glow: 0, coat: 0.7 },
 };
 
 /**
  * A ball of `kind`, `radius` sim units. Returns { group, setRadius(r), setHp(hp), setAxe(dx, dy),
- * setState({ frozen, webbed, burst, charge 0..1, transformed }), flash(), update(dt, time, vx, vy), showLabel(shown),
- * dispose() }.
+ * setSpear(dx, dy, ext 0..1), setKnives(n), setHookReady(ready), setState({ frozen, webbed, burst, sick,
+ * charge 0..1, transformed }), flash(), update(dt, time, vx, vy), showLabel(shown), dispose() }.
  * `group` sits at the ball's centre; the body inside it rolls as it moves.
  */
 export function createBallModel(kind, radius) {
@@ -343,6 +466,47 @@ export function createBallModel(kind, radius) {
     group.add(axe);
     axe.traverse((child) => { if (child.material) extras.push(child.material); });
   }
+  // Parts that don't roll with the ball hang off `fixed` (scaled with the ball); the rest roll with `body`.
+  const fixed = new THREE.Group();
+  group.add(fixed);
+  const own = (object) => object.traverse((child) => { if (child.material && !extras.includes(child.material)) extras.push(child.material); });
+  let spear = null;
+  if (kind === 'spear') {
+    spear = new THREE.Group();
+    const model = spearModel();
+    spear.add(model);
+    group.add(spear);
+    own(spear);
+    spear.userData.model = model;
+  }
+  if (kind === 'vampire') {
+    const fangs = fangsModel();
+    fixed.add(fangs);
+    own(fangs);
+  }
+  if (kind === 'virus') {
+    const knobMaterial = new THREE.MeshStandardMaterial({ color: '#2f8f2a', roughness: 0.45 });
+    body.add(new THREE.Mesh(virusKnobs(), knobMaterial));
+    extras.push(knobMaterial);
+  }
+  const knives = [];
+  if (kind === 'thief') {
+    const steel = new THREE.MeshStandardMaterial({ color: '#d7dee8', roughness: 0.25, metalness: 0.8 });
+    extras.push(steel);
+    for (let i = 0; i < 3; i += 1) {
+      const knife = knifeModel(steel);
+      knife.rotation.z = 0.5 - i * 0.18; // fanned, leaning back
+      knife.scale.setScalar(1.7);
+      group.add(knife);
+      knives.push(knife);
+    }
+  }
+  let readyHook = null;
+  if (kind === 'hook') {
+    readyHook = readyHookModel();
+    group.add(readyHook);
+    own(readyHook);
+  }
 
   // Soft shadow on the box's back wall, down and to the right of the ball: it sells the depth.
   const shadowMaterial = new THREE.MeshBasicMaterial({ map: dotTexture(), color: '#000000', transparent: true, opacity: 0.5, depthWrite: false });
@@ -371,9 +535,14 @@ export function createBallModel(kind, radius) {
   web.visible = false;
   group.add(web);
   extras.push(web.material);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: kind === 'burst' ? '#ff9a1a' : '#7ff8ff', blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: kind === 'burst' ? '#ff9a1a' : kind === 'laser' ? '#c04dff' : '#7ff8ff', blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
   group.add(halo);
   extras.push(halo.material);
+  // Poisoned or infected: a green glow round the ball.
+  const sick = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: '#4dff3a', blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
+  sick.visible = false;
+  group.add(sick);
+  extras.push(sick.material);
 
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
   label.renderOrder = 12;
@@ -383,13 +552,16 @@ export function createBallModel(kind, radius) {
   let r = radius;
   let shownHp = null;
   let flashLeft = 0;
-  let state = { frozen: false, webbed: false, burst: false, charge: 0, transformed: false };
+  let state = { frozen: false, webbed: false, burst: false, sick: false, charge: 0, transformed: false };
   let grim = false;
 
   const setRadius = (next) => {
     r = next;
     body.scale.setScalar(r);
     ice.scale.setScalar(r * 1.2);
+    fixed.scale.setScalar(r);
+    knives.forEach((knife, i) => knife.position.set(-r * 0.35 + i * r * 0.32, r * 0.95, r * 0.2));
+    if (readyHook) readyHook.position.set(0, r * 0.9, 0);
     web.scale.setScalar(r * 2.7);
     web.position.z = r * 0.3;
     shadow.position.set(r * 0.3, -r * 0.45, -(r + 0.9) + 0.15);
@@ -411,6 +583,14 @@ export function createBallModel(kind, radius) {
     label.scale.set(height * entry.aspect, height, 1);
   };
   const setAxe = (dx, dy) => { if (axe) axe.rotation.z = Math.atan2(dy, dx); };
+  /** Points the spear along (dx, dy), its tip `rest` + `ext` (0..1) of the thrust's reach past the ball's edge. */
+  const setSpear = (dx, dy, ext) => {
+    if (!spear) return;
+    spear.rotation.z = Math.atan2(dy, dx);
+    spear.userData.model.position.x = r + 9 + ext * 10; // as in the simulation (SPEAR.rest, SPEAR.reach)
+  };
+  const setKnives = (count) => knives.forEach((knife, i) => { knife.visible = i < count; });
+  const setHookReady = (ready) => { if (readyHook) readyHook.visible = ready; };
   const setState = (next) => {
     state = next;
     if (kind === 'verity' && Boolean(next.transformed) !== grim) {
@@ -425,8 +605,9 @@ export function createBallModel(kind, radius) {
   let roll = 0;
   const update = (dt, time, vx = 0, vy = 0) => {
     // Roll along the way it moves (faces stay upright; the axe ball's seam stays put).
-    const faced = kind === 'verity' || kind === 'thief';
-    if (!faced && kind !== 'axe' && !state.frozen) {
+    const faced = kind === 'verity' || kind === 'thief' || kind === 'snake';
+    const seamed = kind === 'axe' || kind === 'spear' || kind === 'hook'; // the seam stays put
+    if (!faced && !seamed && !state.frozen) {
       roll -= (vx * dt) / Math.max(1, r);
       body.rotation.z = roll * 0.5;
       body.rotation.y = Math.sin(time * 0.8 + radius) * 0.25;
@@ -447,7 +628,13 @@ export function createBallModel(kind, radius) {
     web.visible = state.webbed;
     if (state.webbed) web.material.rotation = Math.sin(time * 2) * 0.15;
 
-    const haloAmount = kind === 'charge' ? state.charge : kind === 'burst' && state.burst ? 0.9 : 0;
+    sick.visible = state.sick;
+    if (state.sick) {
+      sick.material.opacity = 0.55 + Math.sin(time * 7) * 0.2;
+      sick.scale.setScalar(r * 3);
+    }
+
+    const haloAmount = kind === 'charge' ? state.charge : kind === 'burst' && state.burst ? 0.9 : kind === 'laser' ? 0.45 : 0;
     halo.visible = haloAmount > 0;
     halo.material.opacity = haloAmount * (0.75 + Math.sin(time * 9) * 0.15);
     halo.scale.setScalar(r * (2.6 + haloAmount * 1.6));
@@ -461,5 +648,5 @@ export function createBallModel(kind, radius) {
   };
 
   setRadius(radius);
-  return { group, kind, setRadius, setHp, setAxe, setState, flash, update, showLabel, dispose };
+  return { group, kind, setRadius, setHp, setAxe, setSpear, setKnives, setHookReady, setState, flash, update, showLabel, dispose };
 }

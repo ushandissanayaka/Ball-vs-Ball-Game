@@ -32,7 +32,7 @@ function PlayerBadge({ side, player }) {
         </div>
       </div>
       <div className="badge-ball">
-        {player.ball && <div className="badge-ball-name outlined">{BALLS[player.ball].name}</div>}
+        {player.ball && <div className={`badge-ball-name outlined${BALLS[player.ball].name.length > 13 ? ' long' : ''}`}>{BALLS[player.ball].name}</div>}
         <BallIcon kind={player.ball ?? 'unknown'} className="badge-ball-icon" />
       </div>
     </section>
@@ -68,7 +68,7 @@ function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
             onDoubleClick={() => onPick(id)}
           >
             <span className="ball-tile-art"><BallIcon kind={id} className="ball-tile-icon" /></span>
-            <span className="ball-tile-name">{BALLS[id].name}</span>
+            <span className={`ball-tile-name${BALLS[id].name.length > 13 ? ' long' : ''}`}>{BALLS[id].name}</span>
           </button>
         ))}
       </div>

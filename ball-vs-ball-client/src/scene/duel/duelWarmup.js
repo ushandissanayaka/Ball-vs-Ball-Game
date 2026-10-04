@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { createFightFx } from '../../effects/duelFx.js';
 import { createBallModel } from '../../objects/duel/ballModels.js';
+import { createFightProps } from '../../objects/duel/fightProps.js';
 import { createAimArrow, createOrb } from '../../objects/duel/fightView.js';
 import { BALL_IDS } from '../../shared/balls.js';
+import { resolveFight } from '../../shared/duelSim.js';
 
 /**
  * One of everything that only appears mid-duel (every ball, the Verity Ball's grim face, an orb, the aim
@@ -11,12 +13,19 @@ import { BALL_IDS } from '../../shared/balls.js';
  * no material uses them.
  */
 export function createDuelWarmup() {
+  // One quick fight with every ball (each against the next), so the browser has compiled and optimised every
+  // ball's code before the first real duel: run cold, a fight's first steps can take a noticeable moment.
+  BALL_IDS.forEach((ball, i) => {
+    const other = BALL_IDS[(i + 1) % BALL_IDS.length];
+    resolveFight({ seed: i + 1, pink: { ball, aim: { x: 1, y: 0.2 } }, blue: { ball: other, aim: { x: -1, y: -0.2 } } });
+  });
   const group = new THREE.Group();
   group.name = 'duel-warmup';
   for (const kind of BALL_IDS) {
     const model = createBallModel(kind, 7);
     model.setHp(100);
-    model.setState({ frozen: true, webbed: true, burst: true, charge: 1, transformed: false });
+    model.setState({ frozen: true, webbed: true, burst: true, sick: true, charge: 1, transformed: false });
+    model.update(0, 0); // turns the state shells on, so they are drawn (and compiled) too
     group.add(model.group);
   }
   const grim = createBallModel('verity', 7);
@@ -25,6 +34,7 @@ export function createDuelWarmup() {
   group.add(createOrb().group);
   group.add(createAimArrow().group);
   createFightFx(group);
+  createFightProps(group).showAll();
   return group;
 }
 

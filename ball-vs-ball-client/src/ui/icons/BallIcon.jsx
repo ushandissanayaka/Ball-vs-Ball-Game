@@ -13,6 +13,13 @@ const SHADES = {
   charge: ['#a6f8f0', '#35d6c8', '#16877e'],
   electric: ['#7cc0ff', '#1f86e6', '#0d4ea3'],
   spider: ['#e0505a', '#b3202a', '#6a0f16'],
+  laser: ['#d9a8ff', '#7a2be0', '#3a0d70'],
+  spear: ['#8c93a3', '#5d6470', '#2a2e38'],
+  hook: ['#8c93a3', '#5a606c', '#262a33'],
+  vampire: ['#ff6a6a', '#d8202a', '#7a0c12'],
+  poison: ['#9cf27a', '#3fbf3a', '#1c6a1a'],
+  virus: ['#8fe27a', '#3fa83a', '#1c5e1a'],
+  snake: ['#ffffff', '#f1efe4', '#c5c3b6'],
   unknown: ['#c4c9d2', '#868c97', '#4a4f59'],
 };
 
@@ -46,10 +53,27 @@ function Mark({ kind, id }) {
         </>
       );
     case 'axe':
+    case 'spear':
+    case 'hook': {
+      // The glowing seam down the face: orange, green or yellow.
+      const [glow, line] = { axe: ['#ff5a10', '#ffae4a'], spear: ['#2aff2a', '#8dff6a'], hook: ['#ffb000', '#ffe066'] }[kind];
       return (
         <>
-          <path d="M60 10 Q72 50 60 90" fill="none" stroke="#ff5a10" strokeWidth="11" strokeLinecap="round" opacity="0.4" />
-          <path d="M60 10 Q72 50 60 90" fill="none" stroke="#ffae4a" strokeWidth="4.5" strokeLinecap="round" />
+          <path d="M60 10 Q72 50 60 90" fill="none" stroke={glow} strokeWidth="11" strokeLinecap="round" opacity="0.4" />
+          <path d="M60 10 Q72 50 60 90" fill="none" stroke={line} strokeWidth="4.5" strokeLinecap="round" />
+        </>
+      );
+    }
+    case 'laser':
+      return <circle cx="50" cy="50" r="24" fill={`url(#${id}-laser)`} />;
+    case 'snake':
+      return (
+        <>
+          <ellipse cx="38" cy="42" rx="7" ry="9" fill="#141414" />
+          <ellipse cx="62" cy="42" rx="7" ry="9" fill="#141414" />
+          <circle cx="40" cy="39" r="2.6" fill="#fff" />
+          <circle cx="64" cy="39" r="2.6" fill="#fff" />
+          <path d="M27 55 Q50 88 73 55 Q50 68 27 55 Z" fill="#141414" />
         </>
       );
     case 'thief':
@@ -93,11 +117,28 @@ function Mark({ kind, id }) {
   }
 }
 
+// Pictures with parts beyond the ball are framed wider, so the ball comes out a little smaller.
+const VIEW = { axe: '-15 -32 130 130', spear: '-15 -32 130 130', hook: '-15 -32 130 130', vampire: '-10 -4 120 120', virus: '-12 -12 124 124' };
+
+/** The Virus Ball's knobs: twelve short stalks with round tips standing out all round. */
+function VirusKnobs() {
+  return Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2 + 0.2;
+    const [cx, cy] = [50 + Math.cos(a) * 54, 50 + Math.sin(a) * 54];
+    return (
+      <g key={i}>
+        <path d={`M${50 + Math.cos(a) * 40} ${50 + Math.sin(a) * 40} L${cx} ${cy}`} stroke="#2f8f2a" strokeWidth="5" strokeLinecap="round" />
+        <circle cx={cx} cy={cy} r="5.5" fill="#3fa83a" stroke="#1c5e1a" strokeWidth="1.5" />
+      </g>
+    );
+  });
+}
+
 export default function BallIcon({ kind, className }) {
   const id = useId().replace(/:/g, '');
   const [light, mid, dark] = SHADES[kind] ?? SHADES.unknown;
   return (
-    <svg className={className} viewBox={kind === 'axe' ? '-15 -32 130 130' : '0 0 100 100'} aria-hidden="true">
+    <svg className={className} viewBox={VIEW[kind] ?? '0 0 100 100'} aria-hidden="true">
       <defs>
         <radialGradient id={`${id}-ball`} cx="38%" cy="34%" r="70%">
           <stop offset="0" stopColor={light} />
@@ -112,8 +153,28 @@ export default function BallIcon({ kind, className }) {
           <stop offset="0" stopColor="#ffffff" />
           <stop offset="1" stopColor="#8fe4ff" />
         </linearGradient>
+        <radialGradient id={`${id}-laser`}>
+          <stop offset="0" stopColor="#f4dcff" />
+          <stop offset="1" stopColor="#b25cff" stopOpacity="0" />
+        </radialGradient>
         <clipPath id={`${id}-clip`}><circle cx="50" cy="50" r="42" /></clipPath>
       </defs>
+      {kind === 'laser' && <circle cx="50" cy="50" r="47" fill="none" stroke="#d070ff" strokeWidth="6" opacity="0.6" />}
+      {kind === 'virus' && <VirusKnobs />}
+      {kind === 'spear' && (
+        <g>
+          {/* The spear stands up beside the ball, its steel head over the top. */}
+          <rect x="74" y="-8" width="6" height="104" rx="2" fill="#8a5a30" stroke="#2e1a0c" strokeWidth="1.5" />
+          <path d="M77 -30 L84 -8 L77 -2 L70 -8 Z" fill="#e3e9f0" stroke="#4a5160" strokeWidth="2" strokeLinejoin="round" />
+        </g>
+      )}
+      {kind === 'hook' && (
+        <g fill="none" strokeLinecap="round">
+          {/* The hook on its chain over the ball. */}
+          <path d="M50 8 V-8" stroke="#2b2f38" strokeWidth="6" strokeDasharray="5 3" />
+          <path d="M38 -16 Q50 -32 62 -16 M50 -8 V-30" stroke="#dfe6ee" strokeWidth="4" />
+        </g>
+      )}
       {kind === 'axe' && (
         <g>
           {/* The axe stands up out of the ball's top (the picture is framed taller for it): a wooden handle, the
@@ -124,6 +185,13 @@ export default function BallIcon({ kind, className }) {
       )}
       <circle cx="50" cy="50" r="42" fill={`url(#${id}-ball)`} stroke="#0e1424" strokeWidth="3" />
       <g clipPath={`url(#${id}-clip)`}><Mark kind={kind} id={id} /></g>
+      {kind === 'vampire' && (
+        <g fill="#f6f6f2" stroke="#3a0a0e" strokeWidth="2" strokeLinejoin="round">
+          {/* Two fangs hanging under the ball. */}
+          <path d="M33 84 L38 112 L44 86 Z" />
+          <path d="M56 86 L62 112 L67 84 Z" />
+        </g>
+      )}
       <ellipse cx="36" cy="27" rx="11" ry="6" fill="#fff" opacity="0.3" transform="rotate(-25 36 27)" />
     </svg>
   );

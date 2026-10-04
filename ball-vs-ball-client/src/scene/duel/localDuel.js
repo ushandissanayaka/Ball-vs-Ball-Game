@@ -1,9 +1,11 @@
-import { BALL_IDS } from '../../shared/balls.js';
+import { BALL_IDS, isBall } from '../../shared/balls.js';
 import { DUEL } from '../../shared/constants.js';
 import { advance, chooseBall, createMatch, forfeit, lockAim, otherSide, touch, viewFor } from '../../shared/duelMatch.js';
 
 const BOT_NAMES = ['BounceLord25', 'OrbitQueen', 'PixelPop', 'CometKid', 'TinyTitan', 'GlowGlider', 'ZoomZoom99'];
 const between = (min, max) => min + Math.random() * (max - min);
+// ?botBall=<id> (with ?bot=1): the bot always picks that ball, for trying a matchup.
+const BOT_BALL = new URLSearchParams(window.location.search).get('botBall');
 
 /**
  * A duel played entirely in this browser, against a bot, when the game server can't be reached (or with
@@ -28,7 +30,8 @@ export function createLocalDuel({ spot, player }) {
     if (now < thinking.at) return;
     const me = match.players[botSide];
     if (match.phase === 'choose' && !me.ball) {
-      chooseBall(match, botSide, Math.random() < 0.8 ? me.offers[Math.floor(Math.random() * me.offers.length)] : BALL_IDS[Math.floor(Math.random() * BALL_IDS.length)]);
+      const pick = Math.random() < 0.8 ? me.offers[Math.floor(Math.random() * me.offers.length)] : BALL_IDS[Math.floor(Math.random() * BALL_IDS.length)];
+      chooseBall(match, botSide, isBall(BOT_BALL) ? BOT_BALL : pick);
     }
     if (match.phase === 'aim' && !me.locked) {
       // Roughly at the other ball, sometimes off the wall instead.
