@@ -103,3 +103,29 @@ export async function inviteFriend(friendId) {
     return false;
   }
 }
+
+// ---- Purchases ---------------------------------------------------------------------------------------------
+/**
+ * Asks the portal to sell the player `item` ({ id, name, bux }) for bux. Resolves to 'done', 'cancelled', or
+ * 'unavailable' when this SDK version has no purchase call (it then does nothing, and the game says so).
+ */
+export async function purchaseItem(item) {
+  const buy = sdk()?.payments?.purchase ?? sdk()?.store?.purchase ?? null;
+  if (!buy) return 'unavailable';
+  try {
+    const result = await buy({ itemId: item.id, name: item.name, price: item.bux });
+    return result === false || result?.cancelled ? 'cancelled' : 'done';
+  } catch {
+    return 'cancelled';
+  }
+}
+
+/** The player's bux balance, or null when the portal doesn't say. */
+export async function getBuxBalance() {
+  try {
+    const value = await (sdk()?.wallet?.getBalance?.() ?? sdk()?.payments?.getBalance?.());
+    return Number.isFinite(value) ? value : Number.isFinite(value?.bux) ? value.bux : null;
+  } catch {
+    return null;
+  }
+}

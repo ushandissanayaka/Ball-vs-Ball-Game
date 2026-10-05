@@ -456,35 +456,53 @@ img.ball-thumb { object-fit: contain; -webkit-user-drag: none; }
   .stickers-panel { bottom: calc(400 * var(--u)); }
 }
 
-/* ---- "Buy Robux and item" (the portal's purchase prompt) ------------------------------------------------- */
-.buy-backdrop { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); pointer-events: auto; animation: dim-in 0.15s ease both; }
-.buy-modal {
-  --bu: min(calc(var(--u) * 1.55), calc(100vh / 560), calc(100vw / 500));
-  position: relative; box-sizing: border-box; width: calc(458 * var(--bu)); padding: calc(14 * var(--bu)) calc(20 * var(--bu)) calc(18 * var(--bu));
-  background: #1f2024; border: 1px solid #34363c; border-radius: calc(12 * var(--bu)); color: #fff;
-  font-family: "Source Sans 3", "Segoe UI", Arial, sans-serif; letter-spacing: 0; animation: card-in 0.2s ease-out both;
+/* ---- The payment window (the Bloxity portal's style, as the Gifting window) ------------------------------ */
+.pay-backdrop { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); pointer-events: auto; animation: dim-in 0.15s ease both; }
+.pay-modal {
+  --gu: min(var(--u), calc(100vh / 820), calc(100vw / 800));
+  position: relative; box-sizing: border-box; width: calc(750 * var(--gu)); min-height: calc(420 * var(--gu));
+  padding: calc(8 * var(--gu)) calc(37 * var(--gu)) calc(28 * var(--gu)) calc(38 * var(--gu));
+  background: #191a1d; border: calc(1.5 * var(--gu)) solid #3c3d42; border-radius: calc(10 * var(--gu));
+  font-family: "Montserrat", "Segoe UI", Arial, sans-serif; letter-spacing: 0; color: #fff; animation: card-in 0.22s ease-out both;
 }
-.buy-head { display: flex; align-items: center; gap: calc(14 * var(--bu)); height: calc(30 * var(--bu)); }
-.buy-head h2 { flex: 1; margin: 0; font-size: calc(18.5 * var(--bu)); font-weight: 600; color: #e8e8ea; }
-.buy-balance { display: flex; align-items: center; gap: calc(6 * var(--bu)); font-size: calc(14 * var(--bu)); font-weight: 600; }
-.hud .buy-close { width: calc(26 * var(--bu)); height: calc(26 * var(--bu)); display: grid; place-items: center; }
-.buy-close svg { width: calc(22 * var(--bu)); height: calc(22 * var(--bu)); }
-.buy-bux { width: calc(15 * var(--bu)); height: calc(15 * var(--bu)); vertical-align: -0.12em; }
-.buy-bux.dim { opacity: 0.6; }
-.buy-item { display: flex; align-items: center; gap: calc(22 * var(--bu)); margin: calc(18 * var(--bu)) 0 0 calc(12 * var(--bu)); }
-.buy-cube { width: calc(46 * var(--bu)); height: calc(46 * var(--bu)); }
-.buy-item-name { font-size: calc(14.5 * var(--bu)); font-weight: 600; }
-.buy-item-price { display: flex; align-items: center; gap: calc(6 * var(--bu)); margin-top: calc(6 * var(--bu)); font-size: calc(14.5 * var(--bu)); font-weight: 600; }
-.buy-option {
-  display: flex; align-items: center; gap: calc(12 * var(--bu)); height: calc(56 * var(--bu)); margin-top: calc(26 * var(--bu)); padding: 0 calc(16 * var(--bu)) 0 calc(18 * var(--bu));
-  border: calc(1.5 * var(--bu)) solid #e6e6e8; border-radius: calc(8 * var(--bu)); font-size: calc(16 * var(--bu)); font-weight: 600;
+.pay-head { display: flex; align-items: center; gap: calc(22 * var(--gu)); height: calc(90 * var(--gu)); }
+.pay-head h2 { flex: 1; margin: 0; font-size: calc(25 * var(--gu)); font-weight: 700; }
+.pay-balance { display: flex; align-items: center; gap: calc(8 * var(--gu)); font-size: calc(20 * var(--gu)); font-weight: 700; }
+.hud .pay-close { width: calc(69 * var(--gu)); height: calc(68 * var(--gu)); display: grid; place-items: center; background: #e5343a; border-radius: calc(3 * var(--gu)); }
+.hud .pay-close:disabled { opacity: 0.5; cursor: default; }
+.pay-close svg { width: calc(34 * var(--gu)); height: calc(34 * var(--gu)); }
+.pay-bux { width: calc(24 * var(--gu)); height: calc(24 * var(--gu)); flex: none; }
+.pay-bux.dim { opacity: 0.55; }
+.pay-loading { display: grid; place-items: center; height: calc(290 * var(--gu)); }
+/* The white ring that turns while the portal works. */
+.pay-spinner {
+  display: inline-block; width: calc(24 * var(--gu)); height: calc(24 * var(--gu)); box-sizing: border-box; border-radius: 50%;
+  border: calc(3.5 * var(--gu)) solid rgba(255, 255, 255, 0.22); border-top-color: #fff; animation: pay-spin 0.75s linear infinite;
 }
-.buy-option-amount { display: flex; align-items: center; gap: calc(7 * var(--bu)); }
-.buy-option-old { flex: 1; display: flex; align-items: center; gap: calc(3 * var(--bu)); color: #9a9ba0; text-decoration: line-through; }
-.buy-option-cost { font-size: calc(16.5 * var(--bu)); }
-.hud .buy-go {
-  display: block; width: 100%; height: calc(40 * var(--bu)); margin-top: calc(52 * var(--bu)); border-radius: calc(8 * var(--bu));
-  background: #335fff; font: 500 calc(15.5 * var(--bu)) "Source Sans 3", "Segoe UI", Arial, sans-serif; color: #fff;
+.pay-spinner.big { width: calc(64 * var(--gu)); height: calc(64 * var(--gu)); border-width: calc(6 * var(--gu)); }
+@keyframes pay-spin { to { transform: rotate(360deg); } }
+.pay-item {
+  display: flex; align-items: center; gap: calc(52 * var(--gu)); height: calc(155 * var(--gu)); padding-left: calc(52 * var(--gu));
+  background: #1d1e22; border: calc(1.5 * var(--gu)) solid #3d3e44; border-radius: calc(8 * var(--gu));
 }
-.hud .buy-go:hover:not(:disabled) { scale: 1; translate: 0; filter: brightness(1.12); }
-.buy-terms { margin: calc(10 * var(--bu)) 0 0; text-align: center; font-size: calc(10.5 * var(--bu)); color: #c8c9cc; }
+.pay-cube { width: calc(84 * var(--gu)); height: calc(84 * var(--gu)); }
+.pay-item-name { font-size: calc(20 * var(--gu)); font-weight: 600; }
+.pay-item-gift { margin-top: calc(4 * var(--gu)); font-size: calc(14 * var(--gu)); color: #a8a8ac; }
+.pay-item-price { display: flex; align-items: center; gap: calc(10 * var(--gu)); margin-top: calc(10 * var(--gu)); font-size: calc(26 * var(--gu)); font-weight: 700; }
+.pay-option {
+  display: flex; align-items: center; gap: calc(16 * var(--gu)); height: calc(76 * var(--gu)); margin-top: calc(20 * var(--gu)); padding: 0 calc(28 * var(--gu));
+  border: calc(2 * var(--gu)) solid #e6e6e8; border-radius: calc(8 * var(--gu)); font-size: calc(22 * var(--gu)); font-weight: 700;
+}
+.pay-option-amount { display: flex; align-items: center; gap: calc(10 * var(--gu)); }
+.pay-option-old { flex: 1; display: flex; align-items: center; gap: calc(6 * var(--gu)); color: #8e8f94; font-weight: 600; text-decoration: line-through; }
+.hud .pay-go {
+  display: flex; align-items: center; justify-content: center; gap: calc(14 * var(--gu)); width: 100%; height: calc(62 * var(--gu));
+  margin-top: calc(34 * var(--gu)); border-radius: calc(6 * var(--gu)); background: #335fff; color: #fff;
+  font: 700 calc(19 * var(--gu)) "Montserrat", "Segoe UI", Arial, sans-serif;
+}
+.hud .pay-go:hover:not(:disabled) { scale: 1; translate: 0; filter: brightness(1.06); }
+.hud .pay-go:disabled { cursor: default; background: #335fff; color: #fff; opacity: 0.75; }
+.pay-go .pay-spinner { border-color: rgba(255, 255, 255, 0.22); border-top-color: #fff; }
+.pay-terms { margin: calc(14 * var(--gu)) 0 0; text-align: center; font-size: calc(14 * var(--gu)); color: #a8a8ac; }
+.pay-terms.note { color: #e8e8ea; font-weight: 600; }
+.pay-terms.note.done { color: #3ad16b; }

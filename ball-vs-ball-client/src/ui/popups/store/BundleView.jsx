@@ -37,10 +37,10 @@ export default function BundleView({ endsIn, onBuy, onGift, onClose }) {
         <h3 className="bundle-box-title">BALL ONLY</h3>
         <SerialCard kind="ball" />
         <div className="ball-only-name">{ballOnly.name}</div>
-        <button type="button" className="bundle-buy-small" onClick={() => onBuy(ballOnly.price)}>
+        <button type="button" className="bundle-buy-small" onClick={() => onBuy({ id: 'lightwing_ball', name: ballOnly.name, bux: ballOnly.price.bux })}>
           <span className="outlined">Buy</span><BuxMark className="bundle-bux" /><span className="outlined">{ballOnly.price.bux}</span>
         </button>
-        <button type="button" className="bundle-gift-small" onClick={() => onGift({ name: ballOnly.name, bux: ballOnly.price.bux })}>
+        <button type="button" className="bundle-gift-small" onClick={() => onGift({ id: 'lightwing_ball', name: ballOnly.name, bux: ballOnly.price.bux })}>
           <GiftIcon className="bundle-gift-icon" /><span>Gift</span>
         </button>
       </div>
@@ -55,10 +55,10 @@ export default function BundleView({ endsIn, onBuy, onGift, onClose }) {
             </div>
           ))}
         </div>
-        <button type="button" className="bundle-buy-big" onClick={() => onBuy(price)}>
+        <button type="button" className="bundle-buy-big" onClick={() => onBuy({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
           <span className="outlined">Buy</span><BuxMark className="bundle-bux big" /><span className="outlined">{price.bux}</span>
         </button>
-        <button type="button" className="bundle-gift-big" onClick={() => onGift({ name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
+        <button type="button" className="bundle-gift-big" onClick={() => onGift({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
           <GiftIcon className="bundle-gift-icon big" /><span>Gift</span>
         </button>
       </div>

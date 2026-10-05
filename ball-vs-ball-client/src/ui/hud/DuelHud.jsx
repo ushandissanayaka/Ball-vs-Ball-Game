@@ -3,7 +3,7 @@ import { BALLS, BALL_IDS } from '../../shared/balls.js';
 import BallIcon from '../icons/BallIcon.jsx';
 import { CoinIcon, GemIcon, HeartIcon, RefreshIcon } from '../icons/Icons.jsx';
 import QueuePanel from './QueuePanel.jsx';
-import BuyDiamonds from '../popups/BuyDiamonds.jsx';
+import PurchasePrompt from '../popups/PurchasePrompt.jsx';
 
 /** A player's picture (an ImageBitmap of their character's head and shoulders), drawn into a canvas. */
 function Portrait({ picture }) {
@@ -121,7 +121,7 @@ function ChoosePanel({ duel, gems, actions }) {
           </section>
         </>
       )}
-      {buying && <BuyDiamonds onClose={() => setBuying(false)} />}
+      {buying && <PurchasePrompt item={{ id: 'gems_100', name: '100 Diamonds', bux: 99 }} onClose={() => setBuying(false)} />}
     </>
   );
 }
