@@ -77,10 +77,12 @@ export function buildLobby() {
   // chain spike) and the conveyor strips.
   shop.group.updateMatrixWorld(true);
   portal.updateMatrixWorld(true);
+  explosions.updateMatrixWorld(true);
   const [p1, p2] = PROPS.pedestals;
   const animatedBounds = [
     new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(0, 10, 0)), 25), runway.userData.animatedBounds,
     new THREE.Sphere(portal.localToWorld(new THREE.Vector3(0, 5, 0)), 9),
+    new THREE.Sphere(explosions.localToWorld(new THREE.Vector3(-0.3, 6, 22)), 6),
     new THREE.Sphere(new THREE.Vector3((p1[0] + p2[0]) / 2, FLOOR_Y + 12, (p1[1] + p2[1]) / 2), Math.hypot(p1[0] - p2[0], p1[1] - p2[1]) / 2 + 16),
   ];
 
@@ -127,6 +129,7 @@ export function buildLobby() {
     runway.userData.animate(seconds);
     for (const dancer of dancers) dancer.dance(seconds);
     portal.userData.update(seconds);
+    explosions.userData.update(seconds);
   };
   /** Moves the arenas' VS boards; true while any is still moving. */
   const updateArenas = (dt) => {
