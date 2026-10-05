@@ -5,6 +5,8 @@ import { readMove } from '../../controls/playerInput.js';
 import { createSmokeBurst } from '../../effects/duelFx.js';
 import { arenaState, duelAim, duelChoose, duelReroll, joinArena, leaveArena } from '../../net/api.js';
 import { createFightView } from '../../objects/duel/fightView.js';
+import { ballsAppearSound, countdownSound, explosionSound, launchSound, popupSound, resultSound } from '../../audio/sfx.js';
+import { setMusicMood } from '../../audio/music.js';
 import { createHeartsSprite } from '../../objects/duel/heartsSprite.js';
 import { createLegionCharacter, disposeCharacter } from '../../objects/player/LegionCharacter.js';
 import { SIDES } from '../../objects/props/DuelArena.js';
@@ -221,6 +223,8 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     seat = null;
     view = null;
     roundKey = null;
+    lastPhase = null;
+    setMusicMood('lobby');
     if (tellServer && host) host.leave().then((left) => { if (left) arena.setPlayers(left.players, left.capacity, left.reward); });
     fightView.clear();
     endFlight();
@@ -349,6 +353,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
       // Out of the box's open face: toward the camera, level.
       const forward = start ? camera.position.clone().sub(start).setY(0).normalize().multiplyScalar(FLIGHT.forward) : null;
       strike.flight = { model, from: start, forward, scale: model?.group.scale.x ?? 1 };
+      if (model) launchSound();
     }
     loser?.headPosition(to);
     const t = clamp01((since - FLIGHT.start) / (FLIGHT.impact - FLIGHT.start));
@@ -378,6 +383,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     }
     if (t >= 1) {
       strike.impacted = true;
+      explosionSound();
       smoke.burst(to);
       loser?.flinch();
       model?.dispose();
@@ -423,6 +429,22 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     }
   }
 
+  // Sounds as the duel moves on: the ball choice opening, the balls popping into the box, the result. The music
+  // picks up while the player is in a duel.
+  let lastPhase = null;
+  let lastCount = null;
+  function soundPhase(phase, current) {
+    setMusicMood(seat ? 'duel' : 'lobby');
+    if (phase === lastPhase) return;
+    const was = lastPhase;
+    lastPhase = phase;
+    if (was === null) return; // joined mid-duel: no catching-up sounds
+    if (phase === 'choose') popupSound();
+    else if (phase === 'aim') ballsAppearSound();
+    else if (phase === 'over' && current) resultSound(current.winner === seat.spot);
+    if (phase !== 'intro') lastCount = null;
+  }
+
   function stage(dt, time) {
     const now = serverNow();
     const { arena, fightView, spot } = seat;
@@ -438,10 +460,16 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
       );
     }
 
+    soundPhase(phase, view);
     let launched = OPEN_PHASES.has(phase);
     if (phase === 'intro') {
       const left = view.phaseEndsAt - now;
-      arena.setCountdown(left > 1000 ? Math.min(3, Math.ceil((left - 1000) / 1000)) : null);
+      const count = left > 1000 ? Math.min(3, Math.ceil((left - 1000) / 1000)) : 0;
+      if (count !== lastCount) {
+        lastCount = count;
+        countdownSound(count);
+      }
+      arena.setCountdown(count || null);
       launched = left < 1000;
     } else {
       arena.setCountdown(null);

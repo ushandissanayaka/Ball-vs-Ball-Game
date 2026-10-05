@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { revealSound } from '../../../audio/sfx.js';
 import { KINDS } from '../../../shared/catalog.js';
 import { ItemIcon } from '../../icons/ItemArt.jsx';
 
@@ -10,6 +11,9 @@ const RARITY_LABEL = { uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legenda
  */
 export default function CrateReveal({ kind, prizes, onClose }) {
   const single = prizes.length === 1;
+  const RANK = ['uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+  const best = prizes.map((id) => KINDS[kind].items[id].rarity).sort((a, b) => RANK.indexOf(b) - RANK.indexOf(a))[0];
+  useEffect(() => { revealSound(best); }, []);
   return (
     <div className={`crate-reveal ${single ? 'single' : 'multi'}`} onClick={onClose}>
       <div className="reveal-cards">

@@ -103,6 +103,7 @@ export function disposeCharacter(character) {
 
 /**
  * The character. Returns { group, ready, update(dt, speed), headPosition(target), flinch() }: `group` sits at
+ * the feet; `update` returns true on the frame a foot comes down while walking (for footstep sounds);
  * the feet and turns to face where it walks (`group.rotation.y`); `speed` 0..1 drives the walk cycle;
  * `flinch()` knocks it back for a moment (hit in a duel).
  */
@@ -147,9 +148,12 @@ export function createLegionCharacter(avatarSpec) {
   let flinchLeft = 0;
   const turn = new THREE.Quaternion();
   const update = (dt, speed) => {
-    if (!rig) return;
+    if (!rig) return false;
     stride += (speed - stride) * Math.min(1, dt * 10); // ease into and out of walking
+    const before = Math.floor(cycle / Math.PI);
     cycle += dt * (4 + speed * 6);
+    // A foot lands each half swing (when the bob is at its lowest).
+    const footfall = Math.floor(cycle / Math.PI) !== before && stride > 0.3;
     for (const { bone, rest, axis, sign, amount } of rig.swing) {
       turn.setFromAxisAngle(axis, Math.sin(cycle) * amount * stride * sign);
       bone.quaternion.copy(turn).multiply(rest);
@@ -160,6 +164,7 @@ export function createLegionCharacter(avatarSpec) {
     const k = flinchLeft / 0.7;
     body.rotation.x = -Math.sin(k * Math.PI) * 0.35 * k;
     body.rotation.z = Math.sin(k * 22) * 0.06 * k;
+    return footfall;
   };
   const flinch = () => { flinchLeft = 0.7; };
 

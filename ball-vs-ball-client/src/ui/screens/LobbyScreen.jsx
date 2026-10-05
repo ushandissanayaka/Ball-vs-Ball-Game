@@ -11,11 +11,13 @@ import DailyRewards from '../popups/DailyRewards.jsx';
 import Store from '../popups/Store.jsx';
 import Inventory from '../popups/Inventory.jsx';
 import EmoteWheel from '../popups/EmoteWheel.jsx';
+import { clickSound } from '../../audio/sfx.js';
 
 /** Restarts the little lift-and-pop on whichever HUD button was clicked (see .pop in hud.css). */
 function popButton(event) {
   const button = event.target.closest('button');
   if (!button) return;
+  clickSound();
   button.classList.remove('pop');
   void button.offsetWidth; // restart the animation on repeated clicks
   button.classList.add('pop');

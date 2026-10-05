@@ -5,6 +5,7 @@ import { createFightFx } from '../../effects/duelFx.js';
 import { dotTexture } from '../../effects/glowTextures.js';
 import { createBallModel } from './ballModels.js';
 import { createFightProps } from './fightProps.js';
+import { fightSound, winSound } from '../../audio/sfx.js';
 
 const MAX_CATCH_UP = 900; // ticks per frame at most, when a fight is joined late or the tab was hidden
 
@@ -73,7 +74,8 @@ export function createOrb() {
  *                                   flies it), or null
  *   clear(), update(dt, time)
  */
-export function createFightView(arena) {
+/** `arena`'s fight; `audible` fights (the player's own) make their sounds. */
+export function createFightView(arena, { audible = true } = {}) {
   const layer = arena.fightLayer;
   const fx = createFightFx(layer);
   const props = createFightProps(layer);
@@ -208,6 +210,15 @@ export function createFightView(arena) {
 
   const show = (event) => {
     const body = event.id ? byId(event.id) : null;
+    if (audible) {
+      if (event.type === 'over') {
+        const winner = fight.bodies.filter((b) => b.side === event.winner).sort((a, b) => b.hp - a.hp)[0];
+        if (winner) winSound(winner.kind);
+      } else {
+        const owner = body ?? (event.a ? byId(event.a) : null);
+        fightSound(event, owner?.kind);
+      }
+    }
     switch (event.type) {
       case 'hit':
         // Harder crashes throw more sparks, further; the hardest add a shock ring.

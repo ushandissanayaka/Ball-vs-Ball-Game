@@ -7,6 +7,10 @@ import { fontsReady } from './util/canvasText.js';
 import { hideLoadingScreen, showLoadingStep } from './ui/screens/loadingScreen.js';
 import LobbyScreen from './ui/screens/LobbyScreen.jsx';
 import { setBallThumb } from './ui/thumbs.js';
+import { startAudioNow, unlockAudioOnFirstInput } from './audio/engine.js';
+import { loadSamples } from './audio/samples.js';
+import { startMusic } from './audio/music.js';
+import { coinSound } from './audio/sfx.js';
 import { BALL_IDS } from './shared/balls.js';
 
 const LOBBY_REFRESH_MS = 30_000;
@@ -31,7 +35,10 @@ export default function App() {
   const shopActions = useMemo(() => {
     const apply = async (pending) => {
       const result = await pending;
-      if (result.profile) setProfile(result.profile);
+      if (result.profile) {
+        setProfile(result.profile);
+        if (!result.prizes) coinSound();
+      }
       return result;
     };
     return {
@@ -51,6 +58,7 @@ export default function App() {
 
     (async () => {
       startBloxity();
+      unlockAudioOnFirstInput();
       showLoadingStep('Loading fonts', 0.15);
       await fontsReady();
       if (disposed) return;
@@ -85,6 +93,9 @@ export default function App() {
       if (disposed) return;
       loadingEnd();
       gameplayStart();
+      startAudioNow();
+      startMusic();
+      loadSamples();
       // The HUD's ball pictures, from the 3D balls (the drawn icons stand in until each is ready).
       world.renderBallThumbs(BALL_IDS, setBallThumb);
     })();
