@@ -8,6 +8,8 @@ import { createDuelDirector } from './duel/duelDirector.js';
 import { createDuelWarmup, warmUpRenderer } from './duel/duelWarmup.js';
 import { createArenaWatch } from './duel/arenaWatch.js';
 import { createHeadshot } from './headshot.js';
+import { createRemotePlayers } from './remotePlayers.js';
+import { connectPresence } from '../net/presence.js';
 import { QUALITY } from '../config/graphics.js';
 import { SKY } from '../config/palette.js';
 import { createCameraControls } from '../controls/cameraControls.js';
@@ -81,8 +83,12 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   });
   // Everyone else on the arenas: their characters on the squares, their pictures and names on the screens.
   const watch = createArenaWatch({
-    scene, renderer, arenas: lobby.arenas, seatArenaId: () => duel.seatArenaId, myName: getPlayerName,
+    scene, renderer, camera, arenas: lobby.arenas, seatArenaId: () => duel.seatArenaId, myName: getPlayerName,
   });
+  // Everyone else walking about the lobby, live (nobody to see when playing offline against the bot).
+  const others = createRemotePlayers(scene);
+  let presence = null;
+  const offline = new URLSearchParams(window.location.search).has('bot');
   let settings = QUALITY[quality] ?? QUALITY.High;
   let composer = null;
   let needsRender = true;
@@ -164,6 +170,8 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     }
     const settling = Math.abs(ground - position.y) > 0.01;
     const walk = duel.seated ? duel.seatWalk : speed;
+    // Where this character stands, for everyone else (flags: 1 in the air, 2 on a duel square).
+    presence?.setPose([position.x, position.y, position.z, character.group.rotation.y, walk, (airborne ? 1 : 0) | (duel.seated ? 2 : 0)]);
     // Footsteps keep time with the legs, so they quicken as the walk speeds up.
     if (character.update(dt, walk) && !airborne) footstepSound(walk);
     controls.follow(eye.copy(position).setY(position.y + EYE_HEIGHT));
@@ -182,7 +190,8 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (moveCharacter(dt)) needsRender = true;
     if (lobby.updateArenas(dt)) needsRender = true;
     if (duel.update(dt, time / 1000)) needsRender = true;
-    if (watch.update()) needsRender = true;
+    if (watch.update(dt, time / 1000)) needsRender = true;
+    if (others.update(dt)) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
     // The shop's show and the conveyors play at animFps, but only while on screen; off screen they cost nothing.
@@ -213,6 +222,15 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     warmUpRenderer(renderer, scene, camera, draw);
     warmup.visible = false;
     watch.start();
+    if (!offline) {
+      presence = connectPresence({
+        name: getPlayerName,
+        avatar: () => {
+          const spec = getAvatarSpec();
+          return { skinUrl: spec.skinUrl, skinId: spec.equipped?.skinId };
+        },
+      }, others);
+    }
     countdownTimer = setInterval(() => { lobby.apply(null); requestRender(); }, COUNTDOWN_REFRESH_MS);
     frame = requestAnimationFrame(loop);
   };
@@ -239,6 +257,8 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     stopPlayerInput();
     duel.dispose();
     watch.dispose();
+    presence?.dispose();
+    others.onReset();
     clearInterval(countdownTimer);
     observer.disconnect();
     controls.dispose();

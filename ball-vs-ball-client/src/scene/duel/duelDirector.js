@@ -5,7 +5,8 @@ import { readMove } from '../../controls/playerInput.js';
 import { createSmokeBurst } from '../../effects/duelFx.js';
 import { arenaState, duelAim, duelChoose, duelReroll, joinArena, leaveArena } from '../../net/api.js';
 import { createFightView } from '../../objects/duel/fightView.js';
-import { ballsAppearSound, countdownSound, explosionSound, launchSound, popupSound, resultSound } from '../../audio/sfx.js';
+import { ballsAppearSound, countdownSound, popupSound, resultSound } from '../../audio/sfx.js';
+import { createStrike } from './strike.js';
 import { setMusicMood } from '../../audio/music.js';
 import { createHeartsSprite } from '../../objects/duel/heartsSprite.js';
 import { createLegionCharacter, disposeCharacter } from '../../objects/player/LegionCharacter.js';
@@ -18,10 +19,6 @@ import { createLocalDuel } from './localDuel.js';
 
 const POLL_MS = 500;
 const MS_PER_TICK = 1000 / SIM.tickRate;
-// After the fight ends (ms): the winning ball stays on show alone in the box, then leaves it and lands on the
-// loser's head. Its way there: `out` of the flight pops it out of the box toward the camera, then it arcs up
-// `high` over the box's top and drops onto the head. (All inside the round's DUEL_TIMING.strikeMs.)
-const FLIGHT = { start: 1000, impact: 2300, out: 0.2, forward: 5, high: 9 };
 // The camera turns toward the loser as the ball flies, holds on the hit, and turns back (ms after the fight ends).
 const PAN = { in: 900, full: 1800, hold: 3600, out: 4300 };
 const OPEN_PHASES = new Set(['choose', 'aim', 'fight', 'over']);
@@ -41,7 +38,6 @@ const remoteHost = {
 const smooth = (t) => t * t * (3 - 2 * t);
 /** `from` turned toward `to` by `t` (radians, the short way round). */
 const turnToward = (from, to, t) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
-const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const easeOutBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
 
 /**
@@ -84,7 +80,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
   let chosen = null; // the ball picked this round (before the host confirms it)
   let aimLocked = false;
   let aim = { x: 1, y: 0 };
-  let strike = { key: null, flight: null, impacted: false };
+  const strike = createStrike({ scene, camera, smoke });
   let lastHudKey = '';
   let seatWalk = 0; // the player's walk cycle while stepping out beside the grown box (0 standing)
   let occupantsKey = '';
@@ -320,75 +316,16 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     if (!view) return DUEL_TIMING.hearts;
     let hearts = view.players[side].hearts;
     // The loser's heart goes when the ball lands, not when the server worked out the fight.
-    if (view.phase === 'fight' && view.fight.loser === side && !(strike.key === roundKey && strike.impacted)) hearts += 1;
+    if (view.phase === 'fight' && view.fight.loser === side && !strike.impacted(roundKey)) hearts += 1;
     return hearts;
   };
 
   function endFlight() {
-    strike.flight?.model?.dispose();
-    strike = { key: null, flight: null, impacted: false };
+    strike.end();
   }
 
-  const from = new THREE.Vector3();
-  const out = new THREE.Vector3();
-  const over = new THREE.Vector3();
-  const drop = new THREE.Vector3();
-  const to = new THREE.Vector3();
   function stageStrike(now, fight) {
-    if (strike.key !== roundKey) {
-      endFlight();
-      strike.key = roundKey;
-    }
-    const since = now - fight.endsAt;
-    if (since < FLIGHT.start || strike.impacted) return;
-    const loser = characterOf(fight.loser);
-    if (!strike.flight) {
-      if (since > FLIGHT.impact + 600) {
-        strike.impacted = true; // joined too late to see it fly: just count the hit
-        return;
-      }
-      const model = seat.fightView.takeStriker();
-      if (model) scene.attach(model.group);
-      const start = model ? model.group.position.clone() : null;
-      // Out of the box's open face: toward the camera, level.
-      const forward = start ? camera.position.clone().sub(start).setY(0).normalize().multiplyScalar(FLIGHT.forward) : null;
-      strike.flight = { model, from: start, forward, scale: model?.group.scale.x ?? 1 };
-      if (model) launchSound();
-    }
-    loser?.headPosition(to);
-    const t = clamp01((since - FLIGHT.start) / (FLIGHT.impact - FLIGHT.start));
-    const { model } = strike.flight;
-    if (model) {
-      from.copy(strike.flight.from);
-      out.copy(from).add(strike.flight.forward);
-      if (t < FLIGHT.out) {
-        // Pops out of the box.
-        model.group.position.lerpVectors(from, out, smooth(t / FLIGHT.out));
-      } else {
-        // Up over the box's top and down onto the head, speeding up as it falls.
-        const v = (t - FLIGHT.out) / (1 - FLIGHT.out);
-        const u = smooth(v) * 0.4 + v * v * 0.6;
-        const top = Math.max(out.y, to.y) + FLIGHT.high;
-        over.set(out.x, top, out.z);
-        drop.set(to.x, top, to.z);
-        const a = (1 - u) ** 3;
-        const b = 3 * u * (1 - u) ** 2;
-        const c = 3 * u * u * (1 - u);
-        model.group.position.set(0, 0, 0)
-          .addScaledVector(out, a).addScaledVector(over, b).addScaledVector(drop, c).addScaledVector(to, u ** 3);
-      }
-      // Growing as it comes toward the camera, spinning.
-      model.group.scale.setScalar(strike.flight.scale * (1 + Math.sin(t * Math.PI) * 0.9));
-      model.group.rotation.z -= 0.35;
-    }
-    if (t >= 1) {
-      strike.impacted = true;
-      explosionSound();
-      smoke.burst(to);
-      loser?.flinch();
-      model?.dispose();
-      strike.flight.model = null;
-    }
+    strike.stage(now, fight, roundKey, seat.fightView, characterOf(fight.loser));
   }
 
   const camPosition = new THREE.Vector3();
@@ -498,7 +435,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
       stageStrike(now, fight);
     } else {
       fightView.clear();
-      if (strike.flight) endFlight();
+      if (strike.flying) endFlight();
     }
     fightView.update(dt, time);
 

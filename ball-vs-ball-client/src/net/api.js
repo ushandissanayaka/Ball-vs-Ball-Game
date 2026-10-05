@@ -7,7 +7,7 @@ import { STARTER_BALLS, buyStoreItem, claimDailyGems, claimDailyReward, fuseItem
 const TIMEOUT_MS = 6000;
 const GUEST_KEY = 'bvb-guest-id';
 
-function serverUrl() {
+export function serverUrl() {
   const configured = import.meta.env.VITE_API_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
   // Local development: the server runs on port 2568 of the same machine (also when opened from a phone on the LAN).
@@ -98,6 +98,9 @@ export async function fetchArenas() {
 
 /** Opens a guest session (remembering the guest id in this browser); falls back to the starter profile. */
 let sessionToken = null;
+
+/** This guest's session token (null while offline). */
+export const currentSessionToken = () => sessionToken;
 
 export async function openSession() {
   let guestId = null;

@@ -8,6 +8,7 @@ import { sessionRouter } from './routes/session.js';
 import { arenaRouter } from './routes/arena.js';
 import { shopRouter } from './routes/shop.js';
 import { flushProfiles } from './progress/profileStore.js';
+import { attachPresence } from './players/presence.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -24,6 +25,8 @@ app.use((_request, response) => response.status(404).json({ error: 'Not found' }
 const server = app.listen(config.port, '0.0.0.0', () => {
   console.log(`Ball vs Ball server listening on http://localhost:${config.port}`);
 });
+// Everyone in the lobby, live (see players/presence.js).
+attachPresence(server);
 server.on('error', (error) => {
   if (error.code !== 'EADDRINUSE') throw error;
   console.error(
