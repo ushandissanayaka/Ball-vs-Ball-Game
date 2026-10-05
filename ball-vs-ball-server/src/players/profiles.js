@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { STARTER_PROFILE } from '../shared/lobbySeed.js';
 import { getProfile, setProfile } from '../progress/profileStore.js';
 import { questStates, refreshDailyQuests } from '../progress/quests.js';
+import { allowedBalls, levelInfo } from '../shared/levels.js';
 import { STARTER_BALLS, ensureInventory, newDailyState, publicDaily, refreshDaily } from '../shared/rewards.js';
 
 const GUEST_ID = /^[a-zA-Z0-9-]{8,64}$/;
@@ -17,7 +18,8 @@ function newProfile(now) {
     createdAt: now,
     coins: STARTER_PROFILE.coins,
     gems: STARTER_PROFILE.gems,
-    level: STARTER_PROFILE.level,
+    wins: 0,
+    boughtBalls: [],
     coinBoost: starterBoost(now),
     questDay: null,
     questProgress: { ...STARTER_PROFILE.questProgress },
@@ -35,6 +37,9 @@ export function getOrCreateProfile(requestedId, now) {
   const guestId = saved ? requestedId : randomUUID();
   const current = saved?.version === STARTER_PROFILE.version;
   const profile = current ? saved : newProfile(now);
+  // Saves from before levels: count from no wins.
+  if (typeof profile.wins !== 'number') profile.wins = 0;
+  if (!Array.isArray(profile.boughtBalls)) profile.boughtBalls = [];
   const changed = [refreshDailyQuests(profile, now), ensureInventory(profile, now), refreshDaily(profile, now)].some(Boolean);
   if (!current || changed) setProfile(guestId, profile);
   return { guestId, profile };
@@ -44,8 +49,13 @@ export function getOrCreateProfile(requestedId, now) {
 export function publicProfile(profile, now) {
   const boost = profile.coinBoost && profile.coinBoost.endsAt > now ? profile.coinBoost : null;
   return {
-    coins: profile.coins, gems: profile.gems, level: profile.level, coinBoost: boost, ...questStates(profile, now),
+    coins: profile.coins, gems: profile.gems, ...levelInfo(profile.wins), boughtBalls: [...profile.boughtBalls], coinBoost: boost, ...questStates(profile, now),
     balls: { ...profile.balls }, explosions: { ...profile.explosions }, flyers: { ...profile.flyers }, variants: { ...profile.variants },
     daily: publicDaily(profile.daily, now), gemsDay: profile.gemsDay ?? null,
   };
+}
+
+/** The balls a guest may fight with (by level, plus any bought early). */
+export function guestBalls(profile) {
+  return allowedBalls(levelInfo(profile?.wins ?? 0).level, profile?.boughtBalls ?? []);
 }

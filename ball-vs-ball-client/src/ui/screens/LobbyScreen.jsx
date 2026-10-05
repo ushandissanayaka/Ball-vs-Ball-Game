@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { BALLS } from '../../shared/balls.js';
+import { unlockedAt } from '../../shared/levels.js';
 import { useNow } from '../hooks/useNow.js';
 import QuestPanel from '../hud/QuestPanel.jsx';
 import QuickJoin from '../hud/QuickJoin.jsx';
@@ -34,6 +36,21 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
   const now = useNow(1000);
   const inDuel = Boolean(duel.duel);
   const [popup, setPopup] = useState('daily');
+  // LEVEL UP: shown when the level goes up (not on the first profile), naming any balls it unlocks.
+  const [levelUp, setLevelUp] = useState(null);
+  const shownLevel = useRef(null);
+  useEffect(() => {
+    const level = profile.level ?? 0;
+    if (shownLevel.current !== null && level > shownLevel.current) setLevelUp({ level, balls: unlockedAt(level) });
+    shownLevel.current = level;
+  }, [profile.level]);
+  // It waits for the duel's VICTORY! to finish (it shows back in the lobby), then stays a few seconds.
+  const showLevelUp = Boolean(levelUp) && !(duel.duel && duel.duel.result);
+  useEffect(() => {
+    if (!showLevelUp) return undefined;
+    const timer = setTimeout(() => setLevelUp(null), 5000);
+    return () => clearTimeout(timer);
+  }, [showLevelUp]);
   const toggle = (name) => setPopup((current) => (current === name ? null : name));
   const close = () => setPopup(null);
 
@@ -56,7 +73,7 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
             <QuestPanel quests={profile.quests} resetsAt={profile.questsResetAt} now={now} />
             <QuickJoin entries={lobby.quickJoin} />
           </div>
-          <PlayDock level={profile.level} />
+          <PlayDock level={profile.level ?? 0} into={profile.into ?? 0} />
           <Joystick />
           <JumpButton />
         </>
@@ -70,6 +87,15 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
       <Stickers onSend={onSticker} />
       {duel.prompt && <JoinPrompt at={duel.prompt} onJoin={duelActions.join} />}
       {duel.note && <div className="duel-note outlined">{duel.note}</div>}
+      {showLevelUp && (
+        <div className="level-up">
+          <div className="level-up-title outlined">LEVEL UP!</div>
+          <div className="level-up-level outlined">Level {levelUp.level}</div>
+          {levelUp.balls.length > 0 && (
+            <div className="level-up-balls outlined">Unlocked: {levelUp.balls.map((ball) => BALLS[ball].name).join(', ')}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

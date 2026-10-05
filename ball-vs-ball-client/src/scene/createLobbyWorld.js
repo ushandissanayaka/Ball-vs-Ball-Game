@@ -37,7 +37,7 @@ const JUMP = { speed: 24, gravity: 70 };
  * enough for the water (the quality's waterFps); camera moves, new data and resizes draw at once. That keeps
  * phones cool and batteries full.
  */
-export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () => {}, onProfile = () => {} } = {}) {
+export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () => {}, onProfile = () => {}, allowedBalls = () => null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
@@ -82,7 +82,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   const controls = createCameraControls(camera, canvas, cam?.length === 6 && cam.every(Number.isFinite) ? cam : null);
   const duel = createDuelDirector({
     scene, camera, canvas, renderer, arenas: lobby.arenas, character, headshot, controls, onChange: onDuelChange, onProfile,
-    onLeave: (arenaId) => watch.left(arenaId),
+    onLeave: (arenaId) => watch.left(arenaId), allowedBalls,
   });
   // Everyone else on the arenas: their characters on the squares, their pictures and names on the screens.
   const watch = createArenaWatch({

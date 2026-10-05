@@ -1,5 +1,6 @@
 import { ROUTES, arenaIds, DUEL, nextLimitedOfferEnd, nextWeeklyReset, LIMITED_OFFER, DAILY_QUESTS, nextDailyReset } from '../shared/constants.js';
 import { SEED_ARENA_PLAYERS, SEED_LEADERBOARDS, STARTER_PROFILE } from '../shared/lobbySeed.js';
+import { levelInfo } from '../shared/levels.js';
 import { STARTER_BALLS, buyStoreItem, claimDailyGems, claimDailyReward, fuseItem, newDailyState, openCrate as openCrateLocally, publicDaily, refreshDaily } from '../shared/rewards.js';
 
 // Talks to the game server (Render). Every call falls back to the shared sample data, so the lobby still looks
@@ -49,7 +50,8 @@ export function offlineProfile(now = Date.now()) {
   return {
     coins: STARTER_PROFILE.coins,
     gems: STARTER_PROFILE.gems,
-    level: STARTER_PROFILE.level,
+    ...levelInfo(0),
+    boughtBalls: [],
     coinBoost: STARTER_PROFILE.coinBoost
       ? { multiplier: STARTER_PROFILE.coinBoost.multiplier, endsAt: now + STARTER_PROFILE.coinBoost.durationSec * 1000 }
       : null,

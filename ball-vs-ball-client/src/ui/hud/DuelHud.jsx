@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BALLS, BALL_IDS } from '../../shared/balls.js';
+import { UNLOCK_ORDER, ballPrice, unlockLevel } from '../../shared/levels.js';
 import BallIcon from '../icons/BallIcon.jsx';
 import { CoinIcon, GemIcon, HeartIcon, RefreshIcon } from '../icons/Icons.jsx';
 import QueuePanel from './QueuePanel.jsx';
@@ -45,8 +46,12 @@ function PlayerBadge({ side, player }) {
  * to select it (double-click picks it straight away), scroll the wheel if they don't all fit; YES picks the
  * selected ball, NO (or Escape) closes the window.
  */
-function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
+function AllBallsPanel({ secondsLeft, current, allowed, onPick, onClose }) {
   const [selected, setSelected] = useState(current);
+  const [buying, setBuying] = useState(null);
+  const open = (id) => !allowed || allowed.includes(id);
+  // Unlocked first (in unlock order), then the locked ones by the level they open at.
+  const order = [...BALL_IDS].sort((a, b) => (open(b) - open(a)) || (UNLOCK_ORDER.indexOf(a) - UNLOCK_ORDER.indexOf(b)));
   useEffect(() => {
     const onKey = (event) => {
       if (event.key === 'Escape') onClose();
@@ -59,7 +64,7 @@ function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
     <section className="all-balls-panel" role="dialog" aria-label="Select any ball">
       <h2 className="all-balls-title">Select Any Ball - {secondsLeft}</h2>
       <div className="all-balls-grid">
-        {BALL_IDS.map((id) => (
+        {order.map((id) => (open(id) ? (
           <button
             type="button"
             key={id}
@@ -71,8 +76,27 @@ function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
             <span className="ball-tile-art"><BallIcon kind={id} className="ball-tile-icon" /></span>
             <span className={`ball-tile-name${BALLS[id].name.length > 13 ? ' long' : ''}`}>{BALLS[id].name}</span>
           </button>
-        ))}
+        ) : (
+          <button
+            type="button"
+            key={id}
+            className="ball-tile locked"
+            title={`Unlocks at Level ${unlockLevel(id)}. Click to buy it now.`}
+            onClick={() => setBuying(id)}
+          >
+            <span className="ball-tile-art">
+              <BallIcon kind={id} className="ball-tile-icon hidden-ball" />
+              <span className="ball-tile-lock" aria-hidden="true">
+                <svg viewBox="0 0 40 48"><path d="M11 22 V14 A9 9 0 0 1 29 14 V22" fill="none" stroke="#fff" strokeWidth="5" /><rect x="4" y="20" width="32" height="25" rx="4" fill="#fff" /></svg>
+              </span>
+            </span>
+            <span className="ball-tile-name locked-name">Level {unlockLevel(id)}</span>
+          </button>
+        )))}
       </div>
+      {buying && (
+        <PurchasePrompt item={{ id: `ball_${buying}`, name: BALLS[buying].name, bux: ballPrice(buying) }} onClose={() => setBuying(null)} />
+      )}
       <div className="all-balls-buttons">
         <button type="button" className="all-balls-no outlined" onClick={onClose}>NO</button>
         <button type="button" className="all-balls-yes outlined" disabled={!selected} onClick={() => onPick(selected)}>YES</button>
@@ -94,7 +118,7 @@ function ChoosePanel({ duel, gems, actions }) {
     <>
       <div className="duel-dim" />
       {showAll ? (
-        <AllBallsPanel secondsLeft={duel.secondsLeft} current={duel.chosen} onPick={pick} onClose={() => setShowAll(false)} />
+        <AllBallsPanel secondsLeft={duel.secondsLeft} current={duel.chosen} allowed={duel.allowed} onPick={pick} onClose={() => setShowAll(false)} />
       ) : (
         <>
           <h2 className="choose-title">CHOOSE YOUR BALL - {duel.secondsLeft}</h2>

@@ -32,16 +32,17 @@ export const otherSide = (side) => (side === 'pink' ? 'blue' : 'pink');
 const msPerTick = 1000 / SIM.tickRate;
 const OPEN = new Set(['intro', 'choose', 'aim', 'fight']);
 
-/** `players`: { pink: { id, name, avatar }, blue: { ... } }. */
+/** `players`: { pink: { id, name, avatar, allowed }, blue: { ... } }; `allowed`: the balls they may use (all if left out). */
 export function createMatch({ id, seed, now, players }) {
   const match = {
     id, seed: seed >>> 0, round: 0, phase: 'intro', phaseEndsAt: now + DUEL_TIMING.introMs,
     players: {}, fight: null, winner: null, endedBy: null, settled: false,
   };
   for (const side of SIDES) {
-    const { id: playerId, name, avatar } = players[side];
+    const { id: playerId, name, avatar, allowed } = players[side];
+    const usable = Array.isArray(allowed) ? allowed.filter(isBall) : [];
     match.players[side] = {
-      id: playerId, name, avatar, hearts: DUEL_TIMING.hearts, offers: [], rerolls: 0, ball: null, aim: null, locked: false, lastSeen: now,
+      id: playerId, name, avatar, allowed: usable.length >= DUEL_TIMING.offers ? usable : [...BALL_IDS], hearts: DUEL_TIMING.hearts, offers: [], rerolls: 0, ball: null, aim: null, locked: false, lastSeen: now,
     };
   }
   return match;
@@ -52,7 +53,7 @@ const roundRandom = (match, salt) => mulberry32(match.seed ^ Math.imul(match.rou
 function deal(match, side) {
   const player = match.players[side];
   const rand = roundRandom(match, (side === 'pink' ? 0x1f123bb5 : 0x7a3c9e41) ^ Math.imul(player.rerolls + 1, 0x85ebca6b));
-  const pool = [...BALL_IDS];
+  const pool = [...player.allowed];
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rand() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -145,6 +146,7 @@ export function touch(match, side, now) {
 export function chooseBall(match, side, ball) {
   if (match.phase !== 'choose') return 'Not choosing now';
   if (!isBall(ball)) return 'No such ball';
+  if (!match.players[side].allowed.includes(ball)) return 'Ball locked';
   match.players[side].ball = ball;
   return null;
 }
@@ -186,7 +188,7 @@ export function viewFor(match, side, now) {
     const shown = s === side || match.phase !== 'choose';
     return {
       name: p.name, avatar: p.avatar, hearts: p.hearts, chosen: Boolean(p.ball), locked: p.locked,
-      ball: shown ? p.ball : null, ...(s === side ? { offers: p.offers, rerolls: p.rerolls } : {}),
+      ball: shown ? p.ball : null, ...(s === side ? { offers: p.offers, rerolls: p.rerolls, allowed: p.allowed } : {}),
     };
   };
   return {

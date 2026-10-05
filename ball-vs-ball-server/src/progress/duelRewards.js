@@ -9,7 +9,7 @@ const bump = (profile, questId) => {
 
 /**
  * Pays out a finished duel: both players count a game played, the winner gets the win reward (times any
- * active coin boost) and a win. A duel cancelled before it started pays nothing.
+ * active coin boost) and a win (every 3 wins completes a level: see shared/levels.js). A duel cancelled before it started pays nothing.
  */
 export function settleDuel(match, now) {
   if (!match.winner) return;
@@ -23,6 +23,7 @@ export function settleDuel(match, now) {
       const boost = profile.coinBoost && profile.coinBoost.endsAt > now ? profile.coinBoost.multiplier : 1;
       profile.coins += DUEL.winReward * boost;
       bump(profile, 'win_3');
+      profile.wins = (profile.wins ?? 0) + 1;
     }
     setProfile(match.players[side].id, profile);
   }
