@@ -24,10 +24,13 @@ const LAUNCH_BEFORE_MS = 1000;
 /**
  * Who stands where, for everyone in the lobby to see: { pink, blue } each { name, avatar } or null, whether
  * their duel is on (`live`), and when (server time) its squares fly up and the box grows (`launchAt`, so the
- * lobby shows it at the same moment as the players). Only what an opponent is shown anyway.
+ * lobby shows it at the same moment as the players). `duel` is the duel as a spectator sees it (phase, hearts,
+ * the balls once both have chosen, and the fight's setup, which every screen replays the same way): nothing a
+ * player could use against the other (no offers, no ball before both have chosen).
  */
-const occupantsOf = (arena) => ({
+const occupantsOf = (arena, now) => ({
   live: Boolean(arena.match),
+  duel: arena.match ? viewFor(arena.match, null, now) : null,
   launchAt: arena.match?.phase === 'intro' ? arena.match.phaseEndsAt - LAUNCH_BEFORE_MS : 0,
   ...Object.fromEntries(SPOTS.map((spot) => {
     const info = arena.guests[arena.spots[spot]];
@@ -94,7 +97,7 @@ export function listArenas(now = Date.now()) {
 /** Every arena with who stands on it (see `occupantsOf`), for the lobby's frequent check. */
 export function watchArenas(now = Date.now()) {
   for (const arena of arenas.values()) refresh(arena, now);
-  return [...arenas.values()].map((arena) => ({ ...publicArena(arena), occupants: occupantsOf(arena) }));
+  return [...arenas.values()].map((arena) => ({ ...publicArena(arena), occupants: occupantsOf(arena, now) }));
 }
 
 /** Arenas with someone waiting for an opponent. */

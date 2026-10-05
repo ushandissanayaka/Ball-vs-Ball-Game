@@ -1,0 +1,85 @@
+import { currentSessionToken, openSession, serverUrl } from './api.js';
+
+// The live link to everyone else in the lobby (the server's /ws, see the server's players/presence.js): says
+// hello with this guest's session, name and skin, sends where the character stands about ten times a second,
+// and hands on the others' arrivals, moves and departures. It reconnects by itself after a drop (waiting longer
+// each time), and stays quiet while the server can't be reached, so the game plays the same either way.
+const SEND_MS = 100;
+const KEEP_MS = 1000; // standing still, it still says where it is now and then
+
+/**
+ * `handlers`: onJoin(players), onLeave(id), onState(list), onReset() (the link dropped: forget everyone).
+ * Returns { setPose(p), dispose() }; `p` is [x, y, z, yaw, speed, flags].
+ */
+export function connectPresence({ name, avatar }, handlers) {
+  let socket = null;
+  let closed = false;
+  let retry = 1000;
+  let retryTimer = 0;
+  let pose = null;
+  let sentKey = '';
+  let sentAt = 0;
+
+  const open = async () => {
+    if (closed) return;
+    if (!currentSessionToken()) await openSession();
+    const token = currentSessionToken();
+    if (!token || closed) {
+      retryTimer = setTimeout(open, (retry = Math.min(30_000, retry * 2)));
+      return;
+    }
+    const url = `${serverUrl().replace(/^http/, 'ws')}/ws`;
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      retryTimer = setTimeout(open, (retry = Math.min(30_000, retry * 2)));
+      return;
+    }
+    socket.onopen = () => {
+      retry = 1000;
+      socket.send(JSON.stringify({ t: 'hello', sessionToken: token, name: name(), avatar: avatar() }));
+      sentKey = '';
+    };
+    socket.onmessage = (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (message.t === 'join') handlers.onJoin(message.players);
+      else if (message.t === 'leave') handlers.onLeave(message.id);
+      else if (message.t === 'state') handlers.onState(message.p);
+    };
+    socket.onclose = (event) => {
+      socket = null;
+      handlers.onReset();
+      if (closed) return;
+      // An expired session: open a new one before trying again.
+      if (event.code === 4001) openSession();
+      retryTimer = setTimeout(open, (retry = Math.min(30_000, retry * 2)));
+    };
+  };
+
+  const sender = setInterval(() => {
+    if (!pose || socket?.readyState !== WebSocket.OPEN) return;
+    const key = pose.map((v) => Math.round(v * 20)).join(',');
+    const now = performance.now();
+    if (key === sentKey && now - sentAt < KEEP_MS) return;
+    sentKey = key;
+    sentAt = now;
+    socket.send(JSON.stringify({ t: 'move', p: pose }));
+  }, SEND_MS);
+
+  open();
+
+  return {
+    setPose: (p) => { pose = p; },
+    dispose: () => {
+      closed = true;
+      clearTimeout(retryTimer);
+      clearInterval(sender);
+      socket?.close();
+    },
+  };
+}
