@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createLegionCharacter, disposeCharacter } from '../objects/player/LegionCharacter.js';
+import { CHARACTER_HEIGHT, createLegionCharacter, disposeCharacter } from '../objects/player/LegionCharacter.js';
 import { createLabel } from '../util/canvasText.js';
 
 // Everyone else walking about the lobby: their Legion characters, in their own skins, with their names over
@@ -86,5 +86,16 @@ export function createRemotePlayers(scene) {
     return moving;
   };
 
-  return { onJoin, onLeave, onState, onReset, update, get count() { return players.size; } };
+  /**
+   * Where player `id`'s head is (into `target`), or false once they have gone. Seated players are drawn by their
+   * arena, so for them it is worked out from where they last said they stand.
+   */
+  const headOf = (id, target) => {
+    const player = players.get(id);
+    if (!player) return false;
+    if (player.character.group.visible) return player.character.headPosition(target);
+    return target.copy(player.target).setY(player.target.y + CHARACTER_HEIGHT * 0.88);
+  };
+
+  return { onJoin, onLeave, onState, onReset, update, headOf, get count() { return players.size; } };
 }

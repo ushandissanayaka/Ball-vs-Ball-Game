@@ -420,3 +420,71 @@ img.ball-thumb { object-fit: contain; -webkit-user-drag: none; }
 }
 .fusion-note.bad { border-color: #e33a3a; }
 .fusion-note.bad { color: #ff5a5a; }
+
+/* ---- Stickers (in a duel): the button bottom right and its panel ---------------------------------------- */
+.hud .stickers-button {
+  position: absolute; right: calc(22 * var(--u)); bottom: calc(26 * var(--u)); z-index: 6;
+  width: calc(122 * var(--u)); height: calc(122 * var(--u)); display: grid; place-items: center;
+  background: #1e2024; border-radius: calc(12 * var(--u)); box-shadow: 0 calc(4 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.35);
+}
+.hud .stickers-button.open { background: #2c2f35; }
+.stickers-button-icon { width: calc(72 * var(--u)); height: calc(72 * var(--u)); }
+.stickers-panel {
+  --su: var(--u);
+  position: absolute; right: calc(22 * var(--su)); bottom: calc(166 * var(--su)); z-index: 6; box-sizing: border-box;
+  width: calc(452 * var(--su)); padding: calc(18 * var(--su)) calc(28 * var(--su)) calc(28 * var(--su));
+  background: #1e2024; border-radius: calc(10 * var(--su)); box-shadow: 0 calc(8 * var(--su)) calc(30 * var(--su)) rgba(0, 0, 0, 0.45);
+  font-family: "Source Sans 3", "Segoe UI", Arial, sans-serif; letter-spacing: 0; pointer-events: auto;
+  animation: stickers-in 0.16s ease-out both; transform-origin: 100% 100%;
+}
+@keyframes stickers-in { from { opacity: 0; transform: scale(0.92) translateY(calc(8 * var(--su))); } }
+.stickers-head { display: flex; align-items: center; gap: calc(18 * var(--su)); height: calc(46 * var(--su)); margin-bottom: calc(18 * var(--su)); }
+.stickers-head-icon { width: calc(36 * var(--su)); height: calc(36 * var(--su)); }
+.stickers-title { flex: 1; font-size: calc(22 * var(--su)); font-weight: 700; color: #fff; }
+.hud .stickers-mute, .hud .stickers-close { width: calc(46 * var(--su)); height: calc(46 * var(--su)); display: grid; place-items: center; }
+.stickers-mute-icon { width: calc(40 * var(--su)); height: calc(40 * var(--su)); }
+.stickers-close svg { width: calc(36 * var(--su)); height: calc(36 * var(--su)); }
+.stickers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(12 * var(--su)); }
+.hud .sticker {
+  height: calc(124 * var(--su)); display: grid; place-items: center; background: #34373d; border-radius: calc(8 * var(--su));
+}
+.hud .sticker:hover:not(:disabled) { background: #42464e; }
+.hud .sticker:disabled { opacity: 0.45; cursor: default; }
+.sticker-emoji { font: calc(78 * var(--su)) / 1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+@media (pointer: coarse) {
+  .hud .stickers-button { bottom: calc(260 * var(--u)); }
+  .stickers-panel { bottom: calc(400 * var(--u)); }
+}
+
+/* ---- "Buy Robux and item" (the portal's purchase prompt) ------------------------------------------------- */
+.buy-backdrop { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); pointer-events: auto; animation: dim-in 0.15s ease both; }
+.buy-modal {
+  --bu: min(calc(var(--u) * 1.55), calc(100vh / 560), calc(100vw / 500));
+  position: relative; box-sizing: border-box; width: calc(458 * var(--bu)); padding: calc(14 * var(--bu)) calc(20 * var(--bu)) calc(18 * var(--bu));
+  background: #1f2024; border: 1px solid #34363c; border-radius: calc(12 * var(--bu)); color: #fff;
+  font-family: "Source Sans 3", "Segoe UI", Arial, sans-serif; letter-spacing: 0; animation: card-in 0.2s ease-out both;
+}
+.buy-head { display: flex; align-items: center; gap: calc(14 * var(--bu)); height: calc(30 * var(--bu)); }
+.buy-head h2 { flex: 1; margin: 0; font-size: calc(18.5 * var(--bu)); font-weight: 600; color: #e8e8ea; }
+.buy-balance { display: flex; align-items: center; gap: calc(6 * var(--bu)); font-size: calc(14 * var(--bu)); font-weight: 600; }
+.hud .buy-close { width: calc(26 * var(--bu)); height: calc(26 * var(--bu)); display: grid; place-items: center; }
+.buy-close svg { width: calc(22 * var(--bu)); height: calc(22 * var(--bu)); }
+.buy-bux { width: calc(15 * var(--bu)); height: calc(15 * var(--bu)); vertical-align: -0.12em; }
+.buy-bux.dim { opacity: 0.6; }
+.buy-item { display: flex; align-items: center; gap: calc(22 * var(--bu)); margin: calc(18 * var(--bu)) 0 0 calc(12 * var(--bu)); }
+.buy-cube { width: calc(46 * var(--bu)); height: calc(46 * var(--bu)); }
+.buy-item-name { font-size: calc(14.5 * var(--bu)); font-weight: 600; }
+.buy-item-price { display: flex; align-items: center; gap: calc(6 * var(--bu)); margin-top: calc(6 * var(--bu)); font-size: calc(14.5 * var(--bu)); font-weight: 600; }
+.buy-option {
+  display: flex; align-items: center; gap: calc(12 * var(--bu)); height: calc(56 * var(--bu)); margin-top: calc(26 * var(--bu)); padding: 0 calc(16 * var(--bu)) 0 calc(18 * var(--bu));
+  border: calc(1.5 * var(--bu)) solid #e6e6e8; border-radius: calc(8 * var(--bu)); font-size: calc(16 * var(--bu)); font-weight: 600;
+}
+.buy-option-amount { display: flex; align-items: center; gap: calc(7 * var(--bu)); }
+.buy-option-old { flex: 1; display: flex; align-items: center; gap: calc(3 * var(--bu)); color: #9a9ba0; text-decoration: line-through; }
+.buy-option-cost { font-size: calc(16.5 * var(--bu)); }
+.hud .buy-go {
+  display: block; width: 100%; height: calc(40 * var(--bu)); margin-top: calc(52 * var(--bu)); border-radius: calc(8 * var(--bu));
+  background: #335fff; font: 500 calc(15.5 * var(--bu)) "Source Sans 3", "Segoe UI", Arial, sans-serif; color: #fff;
+}
+.hud .buy-go:hover:not(:disabled) { scale: 1; translate: 0; filter: brightness(1.12); }
+.buy-terms { margin: calc(10 * var(--bu)) 0 0; text-align: center; font-size: calc(10.5 * var(--bu)); color: #c8c9cc; }

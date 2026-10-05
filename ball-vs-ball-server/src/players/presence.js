@@ -9,13 +9,17 @@ import { playerInfo } from './playerInfo.js';
 // stands. Arrivals and departures (with names and skins) are sent once, as they happen.
 //   client -> server   { t: 'hello', sessionToken, name, avatar }
 //                      { t: 'move', p: [x, y, z, yaw, speed, flags] }    flags: 1 in the air, 2 on a duel square
+//                      { t: 'sticker', s }                               an emoji over their head (0-5)
 //   server -> client   { t: 'welcome', id }
 //                      { t: 'join', players: [{ id, name, avatar, p }] }
 //                      { t: 'leave', id }
 //                      { t: 'state', p: [[id, x, y, z, yaw, speed, flags], ...] }
+//                      { t: 'sticker', id, s }
 const TICK_MS = 100;
 const PING_MS = 15_000;
-const LIMIT = 4000; // the lobby is about 3000 units across: anything further out is nonsense
+const LIMIT = 4000;
+const STICKERS = 6;
+const STICKER_GAP_MS = 900; // one sticker a second at most per player (no spamming the others) // the lobby is about 3000 units across: anything further out is nonsense
 
 const round = (v, digits = 100) => Math.round(v * digits) / digits;
 const num = (v, max) => (Number.isFinite(v) ? Math.max(-max, Math.min(max, v)) : 0);
@@ -60,6 +64,12 @@ export function attachPresence(server) {
         players.set(socket, joined);
         send(socket, { t: 'welcome', id: joined.id });
         send(socket, { t: 'join', players: [...players.values()].filter((other) => other !== joined && other.placed).map(shown) });
+      } else if (message?.t === 'sticker' && player?.placed) {
+        const s = message.s | 0;
+        const now = Date.now();
+        if (s < 0 || s >= STICKERS || now - (player.stickerAt ?? 0) < STICKER_GAP_MS) return;
+        player.stickerAt = now;
+        toOthers(socket, { t: 'sticker', id: player.id, s });
       } else if (message?.t === 'move' && player && Array.isArray(message.p)) {
         const [x, y, z, yaw, speed, flags] = message.p.map(Number);
         player.p = [round(num(x, LIMIT)), round(num(y, LIMIT)), round(num(z, LIMIT)), round(num(yaw, 100), 1000), round(num(speed, 1)), (flags | 0) & 3];

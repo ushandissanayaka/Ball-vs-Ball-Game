@@ -3,6 +3,7 @@ import { BALLS, BALL_IDS } from '../../shared/balls.js';
 import BallIcon from '../icons/BallIcon.jsx';
 import { CoinIcon, GemIcon, HeartIcon, RefreshIcon } from '../icons/Icons.jsx';
 import QueuePanel from './QueuePanel.jsx';
+import BuyDiamonds from '../popups/BuyDiamonds.jsx';
 
 /** A player's picture (an ImageBitmap of their character's head and shoulders), drawn into a canvas. */
 function Portrait({ picture }) {
@@ -82,7 +83,9 @@ function AllBallsPanel({ secondsLeft, current, onPick, onClose }) {
 
 function ChoosePanel({ duel, gems, actions }) {
   const [showAll, setShowAll] = useState(false);
+  const [buying, setBuying] = useState(false);
   const canReroll = !duel.chosen && !duel.local && gems >= duel.rerollCost;
+  const reroll = () => (canReroll ? actions.reroll() : setBuying(true));
   const pick = (id) => {
     actions.choose(id);
     setShowAll(false);
@@ -110,7 +113,7 @@ function ChoosePanel({ duel, gems, actions }) {
               <span className="choose-tag free outlined">Free</span>
               <span className="outlined">All Balls</span>
             </button>
-            <button type="button" className="reroll" disabled={!canReroll} onClick={actions.reroll}>
+            <button type="button" className="reroll" disabled={Boolean(duel.chosen)} onClick={reroll}>
               <span className="choose-tag gem outlined"><GemIcon className="reroll-gem" />{duel.rerollCost}</span>
               <RefreshIcon className="reroll-icon" />
               <span className="reroll-label outlined">Reroll</span>
@@ -118,6 +121,7 @@ function ChoosePanel({ duel, gems, actions }) {
           </section>
         </>
       )}
+      {buying && <BuyDiamonds onClose={() => setBuying(false)} />}
     </>
   );
 }
