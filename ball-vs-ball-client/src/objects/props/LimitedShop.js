@@ -32,8 +32,8 @@ function buyFaceTexture() {
 export function createLimitedShop() {
   const group = new THREE.Group();
   group.name = 'limited-shop';
-  block(group, [20, 1.4, 14], standard(PROP.plinth, { roughness: 0.5 }));
-  box(group, [20.2, 0.3, 0.3], glow(NEON.red, 1.4), { position: [0, 0.3, 7.05], cast: false });
+  block(group, [28, 1.4, 19], standard(PROP.plinth, { roughness: 0.5 }));
+  box(group, [28.2, 0.3, 0.3], glow(NEON.red, 1.4), { position: [0, 0.3, 9.55], cast: false });
 
   // The animated show: the bike and rider, the summoned ball and the chain figure.
   const showcase = createLimitedShowcase();
