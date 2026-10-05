@@ -29,6 +29,7 @@ export function createClouds({ seed = 11 } = {}) {
     const reflection = material.clone();
     reflection.opacity = 0.75;
     reflection.side = THREE.DoubleSide; // the flip turns the card's front face away
+    reflection.forceSinglePass = true; // a flat card shows one face at a time: one pass looks the same
     return reflection;
   });
   const plane = new THREE.PlaneGeometry(1, 0.5);

@@ -13,7 +13,12 @@ const SNAP = 40; // further than this from where it should be (a teleport, a res
 const nameLines = (name) => [{ text: name, size: 64, fill: '#ffffff', stroke: '#14161c', strokeWidth: 10 }];
 const turnToward = (from, to, t) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
 
-export function createRemotePlayers(scene) {
+export function createRemotePlayers(scene, camera) {
+  // Players the camera can't see still move along (so they're in the right place when looked at), but their
+  // legs aren't posed and they don't ask for the frame to be redrawn: nothing on screen changed.
+  const frustum = new THREE.Frustum();
+  const viewProjection = new THREE.Matrix4();
+  const reach = new THREE.Sphere(new THREE.Vector3(), 6);
   const players = new Map(); // id -> { character, label, target, yaw, speed, flags, placed }
   const head = new THREE.Vector3();
   let changed = false;
@@ -68,6 +73,9 @@ export function createRemotePlayers(scene) {
     let moving = changed;
     changed = false;
     const k = 1 - Math.exp(-FOLLOW * dt);
+    camera.updateMatrixWorld();
+    viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(viewProjection);
     for (const player of players.values()) {
       const { group } = player.character;
       const seated = (player.flags & 2) !== 0;
@@ -78,6 +86,8 @@ export function createRemotePlayers(scene) {
       const turning = Math.abs(Math.atan2(Math.sin(player.yaw - group.rotation.y), Math.cos(player.yaw - group.rotation.y))) > 0.01;
       if (gap > 0.01) group.position.lerp(player.target, k);
       if (turning) group.rotation.y = turnToward(group.rotation.y, player.yaw, k);
+      reach.center.copy(group.position).y += 3;
+      if (!frustum.intersectsSphere(reach)) continue;
       player.character.update(dt, player.speed);
       player.character.headPosition(head);
       player.label.position.copy(head).y += NAME_LIFT;

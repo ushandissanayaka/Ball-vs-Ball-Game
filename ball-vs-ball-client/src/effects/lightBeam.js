@@ -77,6 +77,7 @@ export function createProjectorBeam(length, radius, color = '#f2e9ff') {
     cone.translate(0, 0, length / 2);
     const material = additive(projectorBeamTexture(), color, opacity);
     material.side = THREE.DoubleSide;
+    material.forceSinglePass = true; // additive: one pass looks the same, and skips a shader re-check per frame
     const mesh = new THREE.Mesh(cone, material);
     mesh.renderOrder = 3;
     group.add(mesh);

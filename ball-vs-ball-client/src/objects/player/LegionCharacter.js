@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { dotTexture } from '../../effects/glowTextures.js';
 
 /*
@@ -35,9 +36,32 @@ async function loadSkin(url) {
 
 // The avatar body, downloaded and parsed once; every character wears a clone of it (opponents, players seen on
 // the arenas), so another player appearing costs no new parse.
+/**
+ * The body's six parts (head, torso, arms, legs) share one skeleton, one material and one place, so they are
+ * merged into a single skinned mesh: the same picture in one draw instead of six, for every character.
+ */
+function mergeParts(gltf) {
+  const parts = [];
+  gltf.scene.traverse((object) => { if (object.isSkinnedMesh) parts.push(object); });
+  if (parts.length < 2 || parts.some((part) => part.skeleton !== parts[0].skeleton)) return gltf;
+  const geometry = mergeGeometries(parts.map((part) => part.geometry));
+  if (!geometry) return gltf;
+  const [first] = parts;
+  const merged = new THREE.SkinnedMesh(geometry, first.material);
+  merged.name = 'avatar';
+  first.parent.add(merged);
+  merged.bind(first.skeleton, first.bindMatrix);
+  for (const part of parts) part.removeFromParent();
+  return gltf;
+}
+
+// A sphere round any pose the avatar takes (arms up, a spin, sat on the bike), in its own units: lets the
+// renderer skip characters off screen without working out each pose's bounds.
+const POSE_BOUNDS = new THREE.Sphere(new THREE.Vector3(0, 3.8, 0), 6.5);
+
 let avatarBody = null;
 const loadBody = () => {
-  avatarBody ??= new GLTFLoader().loadAsync(`${CDN}/player.glb`).catch((error) => {
+  avatarBody ??= new GLTFLoader().loadAsync(`${CDN}/player.glb`).then(mergeParts).catch((error) => {
     avatarBody = null; // try again next time
     throw error;
   });
@@ -59,7 +83,9 @@ async function loadAvatar(spec) {
     if (object.isBone) bones[object.name] = object;
     if (object.isMesh) {
       object.material = material;
-      object.frustumCulled = false; // skinned bounds don't follow the pose
+      // Skinned bounds don't follow the pose: a fixed sphere round every pose is used instead, so characters
+      // off screen are skipped.
+      object.boundingSphere = POSE_BOUNDS.clone();
     }
   });
   return { model, bones };

@@ -40,6 +40,11 @@ const JUMP = { speed: 24, gravity: 70 };
 export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () => {}, onProfile = () => {}, allowedBalls = () => null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Checking every shader for errors after compiling makes the browser wait for it to finish (a stall each time a
+  // new one appears): they are known good.
+  renderer.debug.checkShaderErrors = false;
+  // Debug: ?perf exposes the renderer and scene, for measuring draw calls and shaders.
+  if (new URLSearchParams(window.location.search).has('perf')) window.__bvb = { renderer, scene: null };
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
@@ -52,6 +57,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   const camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 1, 14000);
   camera.position.set(...CAMERA.position);
 
+  if (window.__bvb) window.__bvb.scene = scene;
   const sky = createSky();
   const sea = createSea();
   scene.add(sky, createClouds(), sea, createLighting());
@@ -89,7 +95,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     scene, renderer, camera, arenas: lobby.arenas, seatArenaId: () => duel.seatArenaId, myName: getPlayerName,
   });
   // Everyone else walking about the lobby, live (nobody to see when playing offline against the bot).
-  const others = createRemotePlayers(scene);
+  const others = createRemotePlayers(scene, camera);
   const stickers = createStickerBubbles(scene);
   // Someone else's sticker: over their head, with its sound (quieter than one's own).
   others.onSticker = (id, index) => {

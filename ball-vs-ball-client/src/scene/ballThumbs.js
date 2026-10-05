@@ -34,6 +34,7 @@ export function createBallThumbs(renderer, environment) {
   const context = canvas.getContext('2d');
   const image = context.createImageData(SIZE, SIZE);
 
+  let previous = null;
   const render = async (kind) => {
     await idle();
     const model = createBallModel(kind, 7, { thumbnail: true });
@@ -56,7 +57,10 @@ export function createBallThumbs(renderer, environment) {
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
     renderer.setClearColor(clearColor, clearAlpha);
-    model.dispose();
+    // The previous ball goes only now: the next one reuses its shaders instead of compiling them again.
+    previous?.dispose();
+    previous = model;
+    model.group.visible = false;
 
     await renderer.readRenderTargetPixelsAsync(target, 0, 0, SIZE, SIZE, pixels);
     // The target's rows run bottom to top; images run top to bottom.
@@ -75,6 +79,9 @@ export function createBallThumbs(renderer, environment) {
     return URL.createObjectURL(blob);
   };
 
-  const dispose = () => target.dispose();
+  const dispose = () => {
+    previous?.dispose();
+    target.dispose();
+  };
   return { render, dispose };
 }
