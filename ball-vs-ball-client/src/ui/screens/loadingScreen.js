@@ -7,8 +7,20 @@ export function showLoadingStep(message) {
   loadingStep(message);
 }
 
-/** Takes the loading screen away at once, after the game has drawn a frame (so it never flashes empty). */
+/**
+ * The next drawn frame, or `ms` at the latest. A page nobody can see (a background tab, or the portal's frame
+ * before the game says it has loaded) draws no frames at all, so waiting for one alone could wait forever.
+ */
+export const nextFrame = (ms = 120) => new Promise((resolve) => {
+  const timer = setTimeout(resolve, ms);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    clearTimeout(timer);
+    resolve();
+  }));
+});
+
+/** Takes the loading screen away at once, after the game has (most likely) drawn a frame behind it. */
 export async function hideLoadingScreen() {
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await nextFrame();
   document.getElementById('loading-screen')?.remove();
 }

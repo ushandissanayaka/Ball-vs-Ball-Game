@@ -12,6 +12,7 @@ import Store from '../popups/Store.jsx';
 import Inventory from '../popups/Inventory.jsx';
 import EmoteWheel from '../popups/EmoteWheel.jsx';
 import { clickSound } from '../../audio/sfx.js';
+import Stickers from '../hud/Stickers.jsx';
 
 /** Restarts the little lift-and-pop on whichever HUD button was clicked (see .pop in hud.css). */
 function popButton(event) {
@@ -29,7 +30,7 @@ function popButton(event) {
  * One window at a time opens over the lobby: Daily Rewards (open when the game starts), Store, Inventory, or
  * the emote wheel (also on R). Escape closes it.
  */
-export default function LobbyScreen({ lobby, profile, duel, duelActions, shopActions }) {
+export default function LobbyScreen({ lobby, profile, duel, duelActions, shopActions, onSticker }) {
   const now = useNow(1000);
   const inDuel = Boolean(duel.duel);
   const [popup, setPopup] = useState('daily');
@@ -66,6 +67,7 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
       {!inDuel && popup === 'inventory' && <Inventory owned={profile} onFuse={shopActions.fuse} onClose={close} />}
       {!inDuel && popup === 'emotes' && <EmoteWheel onClose={close} />}
       {inDuel && <DuelHud duel={duel.duel} gems={profile.gems} actions={duelActions} />}
+      <Stickers onSend={onSticker} />
       {duel.prompt && <JoinPrompt at={duel.prompt} onJoin={duelActions.join} />}
       {duel.note && <div className="duel-note outlined">{duel.note}</div>}
     </div>

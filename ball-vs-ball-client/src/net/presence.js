@@ -8,8 +8,8 @@ const SEND_MS = 100;
 const KEEP_MS = 1000; // standing still, it still says where it is now and then
 
 /**
- * `handlers`: onJoin(players), onLeave(id), onState(list), onReset() (the link dropped: forget everyone).
- * Returns { setPose(p), dispose() }; `p` is [x, y, z, yaw, speed, flags].
+ * `handlers`: onJoin(players), onLeave(id), onState(list), onSticker(id, index), onReset() (the link dropped:
+ * forget everyone). Returns { setPose(p), sendSticker(index), dispose() }; `p` is [x, y, z, yaw, speed, flags].
  */
 export function connectPresence({ name, avatar }, handlers) {
   let socket = null;
@@ -50,6 +50,7 @@ export function connectPresence({ name, avatar }, handlers) {
       if (message.t === 'join') handlers.onJoin(message.players);
       else if (message.t === 'leave') handlers.onLeave(message.id);
       else if (message.t === 'state') handlers.onState(message.p);
+      else if (message.t === 'sticker') handlers.onSticker?.(message.id, message.s);
     };
     socket.onclose = (event) => {
       socket = null;
@@ -75,6 +76,9 @@ export function connectPresence({ name, avatar }, handlers) {
 
   return {
     setPose: (p) => { pose = p; },
+    sendSticker: (index) => {
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'sticker', s: index }));
+    },
     dispose: () => {
       closed = true;
       clearTimeout(retryTimer);

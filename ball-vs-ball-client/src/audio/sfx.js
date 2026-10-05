@@ -479,3 +479,85 @@ export const resultSound = (won) => play((ctx, out, t) => {
     tone(ctx, out, { at: t + 1.05, type: 'sawtooth', f0: midi(59), f1: midi(55), slide: 0.8, dur: 1, gain: 0.13, filter: 1000 });
   }
 }, { reverb: 0.4, life: 2.2, duck: 0.25 });
+
+// ---- Stickers ---------------------------------------------------------------------------------------------------
+
+const MUTE_KEY = 'bvb-stickers-muted';
+let stickersMuted = false;
+try { stickersMuted = localStorage.getItem(MUTE_KEY) === '1'; } catch { /* storage blocked: sound on */ }
+export const stickerSoundsMuted = () => stickersMuted;
+export function setStickerSoundsMuted(muted) {
+  stickersMuted = muted;
+  try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { /* not remembered */ }
+}
+
+/** A voice-like vowel: a buzzy source through two formant filters (a for "aah", o for "ooh"...). */
+function vowel(ctx, dest, { at, f0, f1 = f0, dur, gain, formants, vibrato = 0 }) {
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(f0, at);
+  osc.frequency.exponentialRampToValueAtTime(f1, at + dur);
+  if (vibrato) {
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 6;
+    const depth = ctx.createGain();
+    depth.gain.value = vibrato;
+    lfo.connect(depth).connect(osc.frequency);
+    lfo.start(at);
+    lfo.stop(at + dur);
+  }
+  const amp = ctx.createGain();
+  amp.gain.setValueAtTime(0.0001, at);
+  amp.gain.linearRampToValueAtTime(gain, at + 0.03);
+  amp.gain.setValueAtTime(gain, at + dur * 0.7);
+  amp.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  for (const [freq, q] of formants) {
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = freq;
+    band.Q.value = q;
+    osc.connect(band).connect(amp);
+  }
+  amp.connect(dest);
+  osc.start(at);
+  osc.stop(at + dur + 0.05);
+}
+
+const AAH = [[800, 6], [1200, 7]];
+const OOH = [[350, 6], [800, 8]];
+const EH = [[550, 6], [1800, 8]];
+
+// Each sticker's sound, after a soft pop as the bubble appears.
+const STICKER_SOUNDS = [
+  // 😱 a cartoon scream
+  (ctx, out, t) => vowel(ctx, out, { at: t + 0.05, f0: 520, f1: 900, dur: 0.6, gain: 0.5, formants: AAH, vibrato: 25 }),
+  // 😯 a gasp, then "oh!"
+  (ctx, out, t) => {
+    noise(ctx, out, { at: t, dur: 0.18, gain: 0.08, f0: 1200, f1: 2600, q: 1.5, attack: 0.1 });
+    vowel(ctx, out, { at: t + 0.2, f0: 330, f1: 420, dur: 0.25, gain: 0.45, formants: OOH });
+  },
+  // 😃 a cheerful chime
+  (ctx, out, t) => [76, 79, 84].forEach((note, i) => {
+    tone(ctx, out, { at: t + 0.04 + i * 0.07, type: 'triangle', f0: midi(note), dur: 0.35, gain: 0.12 });
+    tone(ctx, out, { at: t + 0.04 + i * 0.07, f0: midi(note) * 2, dur: 0.2, gain: 0.03 });
+  }),
+  // 🤢 a queasy "bleh"
+  (ctx, out, t) => {
+    vowel(ctx, out, { at: t + 0.04, f0: 180, f1: 120, dur: 0.5, gain: 0.45, formants: EH, vibrato: 18 });
+    const gurgle = noise(ctx, out, { at: t + 0.1, dur: 0.45, gain: 0.07, f0: 400, f1: 250, q: 5 });
+    tremolo(ctx, gurgle, { at: t + 0.1, dur: 0.45, rate: 22, depth: 0.05 });
+  },
+  // 🤔 "hmm"
+  (ctx, out, t) => vowel(ctx, out, { at: t + 0.04, f0: 170, f1: 200, dur: 0.6, gain: 0.5, formants: [[250, 5], [500, 6]] }),
+  // 😈 a sly low "heh heh heh"
+  (ctx, out, t) => [0, 0.16, 0.32].forEach((dt, i) => vowel(ctx, out, { at: t + 0.04 + dt, f0: 150 - i * 12, f1: 120 - i * 12, dur: 0.13, gain: 0.5, formants: EH })),
+];
+
+/** A sticker popping up: a soft pop and its own little sound. `near` false: a quieter one for other players'. */
+export const stickerSound = (index, near = true) => !stickersMuted && STICKER_SOUNDS[index] && play((ctx, out, t) => {
+  const level = ctx.createGain();
+  level.gain.value = near ? 1 : 0.55;
+  level.connect(out);
+  tone(ctx, level, { at: t, f0: 380, f1: 900, slide: 0.05, dur: 0.12, gain: 0.18 });
+  STICKER_SOUNDS[index](ctx, level, t);
+}, { reverb: 0.15, life: 0.9, duck: 0.6 });

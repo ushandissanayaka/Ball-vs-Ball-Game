@@ -9,6 +9,9 @@ import { createDuelWarmup, warmUpRenderer } from './duel/duelWarmup.js';
 import { createArenaWatch } from './duel/arenaWatch.js';
 import { createHeadshot } from './headshot.js';
 import { createRemotePlayers } from './remotePlayers.js';
+import { createStickerBubbles, warmStickers } from './stickers.js';
+import { idle } from './headshot.js';
+import { stickerSound } from '../audio/sfx.js';
 import { connectPresence } from '../net/presence.js';
 import { QUALITY } from '../config/graphics.js';
 import { SKY } from '../config/palette.js';
@@ -87,6 +90,19 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   });
   // Everyone else walking about the lobby, live (nobody to see when playing offline against the bot).
   const others = createRemotePlayers(scene);
+  const stickers = createStickerBubbles(scene);
+  // Someone else's sticker: over their head, with its sound (quieter than one's own).
+  others.onSticker = (id, index) => {
+    stickers.show(id, index, (target) => others.headOf(id, target));
+    stickerSound(index, false);
+  };
+  /** The player's own sticker: over their head at once, and to everyone else. */
+  const sendSticker = (index) => {
+    stickers.show('me', index, (target) => character.headPosition(target));
+    stickerSound(index, true);
+    presence?.sendSticker(index);
+    needsRender = true;
+  };
   let presence = null;
   const offline = new URLSearchParams(window.location.search).has('bot');
   let settings = QUALITY[quality] ?? QUALITY.High;
@@ -192,6 +208,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (duel.update(dt, time / 1000)) needsRender = true;
     if (watch.update(dt, time / 1000)) needsRender = true;
     if (others.update(dt)) needsRender = true;
+    if (stickers.update(dt)) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
     // The shop's show and the conveyors play at animFps, but only while on screen; off screen they cost nothing.
@@ -222,6 +239,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     warmUpRenderer(renderer, scene, camera, draw);
     warmup.visible = false;
     watch.start();
+    idle().then(() => warmStickers(renderer));
     if (!offline) {
       presence = connectPresence({
         name: getPlayerName,
@@ -266,5 +284,5 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     renderer.dispose();
   };
 
-  return { start, applyLobby, setQuality, renderBallThumbs, duel: duel.actions, dispose };
+  return { start, applyLobby, setQuality, renderBallThumbs, sendSticker, duel: duel.actions, dispose };
 }
