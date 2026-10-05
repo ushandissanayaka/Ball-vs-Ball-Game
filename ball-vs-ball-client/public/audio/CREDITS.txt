@@ -1,0 +1,3 @@
+Sound effects in this folder: Kenney (www.kenney.nl), "Impact Sounds" and "Sci-Fi Sounds" packs.
+License: Creative Commons Zero (CC0) - free for personal, educational and commercial use; credit not required.
+Converted to mono 32 kHz WAV and normalised for the game.

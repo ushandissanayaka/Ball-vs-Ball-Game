@@ -14,6 +14,7 @@ import { createCameraControls } from '../controls/cameraControls.js';
 import { createBloomComposer } from '../effects/postprocessing.js';
 import { createClouds } from '../objects/environment/Clouds.js';
 import { createBallThumbs } from './ballThumbs.js';
+import { footstepSound, jumpSound, landSound } from '../audio/sfx.js';
 import { createSea } from '../objects/environment/Sea.js';
 import { bakeSkyReflections, createSky } from '../objects/environment/Sky.js';
 import { buildLobby } from './buildLobby.js';
@@ -145,6 +146,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (jump && !airborne) {
       airborne = true;
       rise = JUMP.speed;
+      jumpSound();
     }
     const ground = lobby.walkArea.groundAt(position.x, position.z);
     if (airborne && !duel.seated) {
@@ -153,6 +155,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
       if (position.y <= ground) {
         position.y = ground;
         airborne = false;
+        landSound();
       }
     } else {
       airborne = false;
@@ -160,7 +163,9 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
       position.y += (ground - position.y) * Math.min(1, dt * 14);
     }
     const settling = Math.abs(ground - position.y) > 0.01;
-    character.update(dt, duel.seated ? duel.seatWalk : speed);
+    const walk = duel.seated ? duel.seatWalk : speed;
+    // Footsteps keep time with the legs, so they quicken as the walk speeds up.
+    if (character.update(dt, walk) && !airborne) footstepSound(walk);
     controls.follow(eye.copy(position).setY(position.y + EYE_HEIGHT));
     return speed > 0.01 || settling || airborne || push !== 0;
   };
