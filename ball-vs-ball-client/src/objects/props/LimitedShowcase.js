@@ -8,6 +8,7 @@ import { canvasTexture, DISPLAY_FONT } from '../../util/canvasText.js';
 import { glow, standard } from '../../util/materials.js';
 import { mulberry32 } from '../../util/random.js';
 import { createBikeRider } from './BikeRider.js';
+import { batchStatic } from '../../util/staticBatch.js';
 
 /*
  * The limited-time offer's show, a 10-second loop (after the reference shots). Layout: the BUY box in the middle
@@ -205,6 +206,7 @@ function createChainFigure() {
     eye.position.set(x, 7.15, 0.81);
     body.add(eye);
   }
+  batchStatic(body); // a rigid figure: one mesh per material
   group.add(body);
 
   const redGlow = glow(NEON.red, 2.2);

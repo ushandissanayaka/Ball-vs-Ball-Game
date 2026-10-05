@@ -5,6 +5,7 @@ import { additive, dotTexture } from '../../effects/glowTextures.js';
 import { canvasTexture, createLabel, stationLines } from '../../util/canvasText.js';
 import { glow, standard } from '../../util/materials.js';
 import { addMesh, block, box } from '../../util/mesh.js';
+import { batchStatic } from '../../util/staticBatch.js';
 
 /** The TV screen picture: a pink-white flower burst on violet, with a cyan four-point sparkle. */
 function screenTexture() {
@@ -118,6 +119,7 @@ function createAtom(R) {
   const packed = [[0, 0, 0], [0.55, 0.3, 0.1], [-0.5, 0.25, -0.2], [0.1, -0.55, 0.25], [-0.2, 0.1, 0.6], [0.3, 0.2, -0.55], [-0.35, -0.4, -0.3]];
   packed.forEach((at, i) => addMesh(nucleus, new THREE.SphereGeometry(0.45, 14, 10), glow(i % 2 ? ATOM_CYAN : ATOM_GREEN, 1.6), { position: at, cast: false }));
   const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: ATOM_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }));
+  batchStatic(nucleus); // the packed balls turn together: one mesh per colour
   core.scale.setScalar(3.2);
   nucleus.add(core);
   group.add(nucleus);

@@ -68,5 +68,8 @@ export function starTexture() {
 export function additive(map, color, opacity = 1) {
   return new THREE.MeshBasicMaterial({
     map, color, opacity, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+    // Additive light looks the same drawn in either order: one pass, not three.js's two (which also re-checks the
+    // shader every frame).
+    forceSinglePass: true,
   });
 }

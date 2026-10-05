@@ -4,6 +4,7 @@ import { glow, standard } from '../../util/materials.js';
 import { addMesh } from '../../util/mesh.js';
 import { puffTexture } from '../../effects/smokeParticles.js';
 import { createLegionPuppet } from '../player/LegionCharacter.js';
+import { batchStatic } from '../../util/staticBatch.js';
 
 // A big black cruiser bike ridden by Bloxity's own Legion avatar (full kit and shoes), after the reference shots. Built facing +x with its origin where the rear tyre touches the
 // ground, so turning the group about z pops a wheelie round the rear wheel, as a real one does. It moves, so it
@@ -158,6 +159,14 @@ export function createBikeRider() {
   tip.rotateZ(Math.PI / 2 - 0.12);
   part(group, tip, standard('#2a2c32', { roughness: 0.6 }), { position: [-1.0, 2.3, 0.85] });
 
+  // Merge the parts that never move against each other into one mesh per material (the same picture in a
+  // handful of draws instead of dozens): the frame and body, and each wheel on its own (they spin).
+  for (const spinning of [rear, front]) {
+    batchStatic(spinning);
+    spinning.userData.dynamic = true;
+  }
+  batchStatic(group);
+  for (const spinning of [rear, front]) spinning.userData.dynamic = false;
   group.add(legionRider());
   return { group, rear, front };
 }
