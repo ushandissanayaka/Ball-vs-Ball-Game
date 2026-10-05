@@ -11,6 +11,7 @@ import BundleView from './store/BundleView.jsx';
 import GiftModal from './store/GiftModal.jsx';
 import CrateReveal from './store/CrateReveal.jsx';
 import PrizeList from './store/PrizeList.jsx';
+import PurchasePrompt from './PurchasePrompt.jsx';
 
 const DAY = 24 * 3600_000;
 const TAB_KIND = { balls: 'ball', explosions: 'explosion', flyers: 'flyer' };
@@ -91,6 +92,7 @@ export default function Store({ profile, now, actions, onClose }) {
   const [reveal, setReveal] = useState(null); // { kind, prizes }
   const [gift, setGift] = useState(null); // { name, bux }
   const [prizeList, setPrizeList] = useState(null); // a crate id
+  const [paying, setPaying] = useState(null); // { id, name, bux, giftTo? }: the payment window
   useEffect(() => {
     if (!note) return undefined;
     const timer = setTimeout(() => setNote(null), 2200);
@@ -98,9 +100,9 @@ export default function Store({ profile, now, actions, onClose }) {
   }, [note]);
 
   const fail = (error) => setNote({ text: MESSAGES[error] ?? MESSAGES.refused, bad: true });
-  const bux = () => setNote({ text: MESSAGES.bux });
+  const pay = (item) => setPaying(item);
   const buy = async (item) => {
-    if (!item.price.coins) return bux();
+    if (!item.price.coins) return pay({ id: item.id, name: item.name, bux: item.price.bux });
     const result = await actions.buy(item.id);
     return result.error ? fail(result.error) : setNote({ text: `Bought ${item.name}!` });
   };
@@ -113,12 +115,16 @@ export default function Store({ profile, now, actions, onClose }) {
     const result = await actions.claimGems();
     return result.error ? fail(result.error) : setNote({ text: 'Daily Diamonds claimed!' });
   };
-  const sendGift = (friend) => setNote({ text: `Gifting to ${friend.name}: ${MESSAGES.bux.toLowerCase()}` });
+  const sendGift = (friend, item) => {
+    setGift(null);
+    pay({ ...item, giftTo: friend.name });
+  };
   const overlays = (
     <>
       {gift && <GiftModal item={gift} onClose={() => setGift(null)} onSend={sendGift} />}
       {prizeList && <PrizeList crateId={prizeList} onClose={() => setPrizeList(null)} />}
       {reveal && <CrateReveal kind={reveal.kind} prizes={reveal.prizes} onClose={() => setReveal(null)} />}
+      {paying && <PurchasePrompt item={paying} onClose={() => setPaying(null)} />}
       {note && <div className={`store-note outlined ${note.bad ? 'bad' : ''}`}>{note.text}</div>}
     </>
   );
@@ -128,7 +134,7 @@ export default function Store({ profile, now, actions, onClose }) {
       <>
         <BundleView
           endsIn={daysHours(nextCycleEnd(now, LIMITED_BUNDLE.days * DAY) - now)}
-          onBuy={bux} onGift={setGift} onClose={() => setView('events')}
+          onBuy={pay} onGift={setGift} onClose={() => setView('events')}
         />
         {overlays}
       </>
@@ -157,7 +163,12 @@ export default function Store({ profile, now, actions, onClose }) {
           <button type="button" className="store-tab explosions" onClick={() => setView('explosions')}><SplashIcon className="store-tab-icon splash" /><span>Explosions</span></button>
           <button type="button" className="store-tab flyers" onClick={() => setView('flyers')}><UfoIcon className="store-tab-icon ufo" /><span>Flyers</span></button>
         </nav>
-        {view === 'events' && <EventsView now={now} onBuy={buy} onView={() => setView('bundle')} onBux={bux} />}
+        {view === 'events' && (
+          <EventsView
+            now={now} onBuy={buy} onView={() => setView('bundle')}
+            onBux={() => pay({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: LIMITED_BUNDLE.price.bux })}
+          />
+        )}
         {TAB_KIND[view] && (
           <CrateView
             key={view} kind={TAB_KIND[view]} wallet={profile}
@@ -166,8 +177,8 @@ export default function Store({ profile, now, actions, onClose }) {
         )}
         {view === 'gems' && (
           <GemsView
-            gemsDay={profile.gemsDay} now={now} onBuy={bux} onClaimDaily={claimGems}
-            onGift={(pack) => setGift({ name: `${pack.gems} Diamonds`, bux: pack.bux })}
+            gemsDay={profile.gemsDay} now={now} onBuy={(pack) => pay({ id: `gems_${pack.gems}`, name: `${pack.gems} Diamonds`, bux: pack.bux })} onClaimDaily={claimGems}
+            onGift={(pack) => setGift({ id: `gems_${pack.gems}`, name: `${pack.gems} Diamonds`, bux: pack.bux })}
           />
         )}
       </section>
