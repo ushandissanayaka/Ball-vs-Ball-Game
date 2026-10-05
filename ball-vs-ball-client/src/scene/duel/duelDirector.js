@@ -55,7 +55,7 @@ const easeOutBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
  * `onChange(hud)` tells the HUD what to show (see `hudState`); `onProfile(profile)` passes on coin and gem
  * changes. `update(dt, seconds)` runs it all each frame and returns true while it needs drawing.
  */
-export function createDuelDirector({ scene, camera, canvas, renderer, arenas, character, headshot, controls, onChange, onProfile, onLeave = () => {} }) {
+export function createDuelDirector({ scene, camera, canvas, renderer, arenas, character, headshot, controls, onChange, onProfile, onLeave = () => {}, allowedBalls = () => null }) {
   const smoke = createSmokeBurst(scene);
   const fightViews = new Map();
   const fightViewOf = (arenaId, arena) => {
@@ -143,7 +143,8 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
     clockSynced = false;
     pushHud(true);
 
-    const player = { name: mySeat.name, avatar: avatarForServer() };
+    // The server works out the balls this player may use itself; a bot duel uses these.
+    const player = { name: mySeat.name, avatar: avatarForServer(), allowed: allowedBalls() };
     let host = null;
     if (FORCE_BOT) host = createLocalDuel({ spot, player });
     else {
@@ -486,6 +487,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
         secondsLeft: timed ? Math.max(0, Math.ceil((view.phaseEndsAt - now) / 1000)) : null,
         players: { pink: playerOf('pink'), blue: playerOf('blue') },
         offers: view?.players[me].offers ?? [],
+        allowed: view?.players[me].allowed ?? null,
         chosen: view?.players[me].ball ?? chosen,
         locked: aimLocked || Boolean(view?.players[me].locked),
         fightBanner: Boolean(fight) && now > fight.startsAt - 700 && now < fight.startsAt + 650,

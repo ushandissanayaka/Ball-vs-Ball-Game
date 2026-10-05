@@ -7,6 +7,7 @@ import { fontsReady } from './util/canvasText.js';
 import { hideLoadingScreen, nextFrame, showLoadingStep } from './ui/screens/loadingScreen.js';
 import LobbyScreen from './ui/screens/LobbyScreen.jsx';
 import { setBallThumb } from './ui/thumbs.js';
+import { allowedBalls } from './shared/levels.js';
 import { startAudioNow, unlockAudioOnFirstInput } from './audio/engine.js';
 import { loadSamples } from './audio/samples.js';
 import { startMusic } from './audio/music.js';
@@ -84,7 +85,10 @@ export default function App() {
       showLoadingStep('Building the arena', 0.35);
       // Let the screen paint before the (synchronous) world build (never waiting long: see nextFrame).
       await nextFrame();
-      world = createLobbyWorld(canvasRef.current, { quality: defaultQuality(), onDuelChange: setDuel, onProfile: setProfile });
+      world = createLobbyWorld(canvasRef.current, {
+        quality: defaultQuality(), onDuelChange: setDuel, onProfile: setProfile,
+        allowedBalls: () => allowedBalls(profileRef.current.level ?? 0, profileRef.current.boughtBalls ?? []),
+      });
       worldRef.current = world;
 
       showLoadingStep('Connecting', 0.75);

@@ -1,4 +1,4 @@
-import { BALL_IDS, isBall } from '../../shared/balls.js';
+import { isBall } from '../../shared/balls.js';
 import { DUEL } from '../../shared/constants.js';
 import { advance, chooseBall, createMatch, forfeit, lockAim, otherSide, touch, viewFor } from '../../shared/duelMatch.js';
 
@@ -19,7 +19,7 @@ export function createLocalDuel({ spot, player }) {
   const botArrives = joinedAt + between(2500, 4500);
   // A random Bloxity skin (the character falls back to the default skin if that one isn't there).
   const skinId = String(1 + Math.floor(Math.random() * 12));
-  const bot = { id: 'bot', name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], avatar: { equipped: { skinId } } };
+  const bot = { id: 'bot', name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], avatar: { equipped: { skinId } }, allowed: player.allowed };
   let match = null;
   let thinking = { key: null, at: 0 };
   let gone = false;
@@ -30,8 +30,8 @@ export function createLocalDuel({ spot, player }) {
     if (now < thinking.at) return;
     const me = match.players[botSide];
     if (match.phase === 'choose' && !me.ball) {
-      const pick = Math.random() < 0.8 ? me.offers[Math.floor(Math.random() * me.offers.length)] : BALL_IDS[Math.floor(Math.random() * BALL_IDS.length)];
-      chooseBall(match, botSide, isBall(BOT_BALL) ? BOT_BALL : pick);
+      const pick = Math.random() < 0.8 ? me.offers[Math.floor(Math.random() * me.offers.length)] : me.allowed[Math.floor(Math.random() * me.allowed.length)];
+      if (!isBall(BOT_BALL) || chooseBall(match, botSide, BOT_BALL)) chooseBall(match, botSide, pick);
     }
     if (match.phase === 'aim' && !me.locked) {
       // Roughly at the other ball, sometimes off the wall instead.
