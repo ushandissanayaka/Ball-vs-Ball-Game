@@ -60,7 +60,7 @@ export const PROPS = {
   pedestals: [[-13, -37], [13, -37]],
   portal2v2: { position: [0, -20], rotation: 0 },
   flyers: { position: [-38, -14], rotation: 0.9 },
-  explosions: { position: [38, -20], rotation: -0.95 },
+  explosions: { position: [38, -20], rotation: -0.13 }, // projecting toward the Balls machine
   balls: { position: [32, 27], rotation: -2.3 },
   limitedShop: { position: [-32, 30], rotation: 2.25 },
 };
