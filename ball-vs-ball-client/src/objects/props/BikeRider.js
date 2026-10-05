@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { NEON } from '../../config/palette.js';
-import { canvasTexture } from '../../util/canvasText.js';
 import { glow, standard } from '../../util/materials.js';
 import { addMesh } from '../../util/mesh.js';
 import { puffTexture } from '../../effects/smokeParticles.js';
+import { createLegionPuppet } from '../player/LegionCharacter.js';
 
-// A big black cruiser bike with a blocky Bloxity rider in full kit (orange hair, black jacket, camo trousers,
-// white trainers), after the reference shots. Built facing +x with its origin where the rear tyre touches the
+// A big black cruiser bike ridden by Bloxity's own Legion avatar (full kit and shoes), after the reference shots. Built facing +x with its origin where the rear tyre touches the
 // ground, so turning the group about z pops a wheelie round the rear wheel, as a real one does. It moves, so it
 // casts no shadow (the shadow map is drawn once); the showcase lays a soft shadow under it instead.
 
@@ -21,11 +20,6 @@ const COLORS = {
   hubDark: '#5c6470',
   chrome: '#8d95a1',
   engine: '#3a3f4a',
-  skin: '#c9d3e3',
-  hair: '#d9963a',
-  jacket: '#202329',
-  trousers: '#46523f',
-  shoes: '#f1f2f4',
 };
 
 const mat = {
@@ -90,56 +84,31 @@ const puffMaterial = (color, opacity) => () => {
 const FLAME_PUFF = puffMaterial('#ff2a3f', 0.95);
 const DARK_PUFF = puffMaterial('#14060a', 0.85);
 
-function faceTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = COLORS.skin;
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#16181d';
-  ctx.beginPath();
-  ctx.ellipse(22, 28, 3.5, 6, 0, 0, Math.PI * 2);
-  ctx.ellipse(42, 28, 3.5, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#16181d';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(32, 38, 9, 0.2 * Math.PI, 0.8 * Math.PI);
-  ctx.stroke();
-  return canvasTexture(canvas);
-}
 
-/** The blocky rider, seated: hips over the seat, hands on the bars, feet on the pegs. */
-function rider() {
-  const group = new THREE.Group();
-  const skin = standard(COLORS.skin, { roughness: 0.6 });
-  const jacket = standard(COLORS.jacket, { roughness: 0.55 });
-  const trousers = standard(COLORS.trousers, { roughness: 0.8 });
-  const hair = standard(COLORS.hair, { roughness: 0.7 });
-  const shoes = standard(COLORS.shoes, { roughness: 0.5 });
-
-  // Torso, leaning a little forward.
-  boxPart(group, [1.05, 2.1, 2.0], jacket, { position: [2.05, 5.45, 0], rotation: [0, 0, -0.18] });
-  boxPart(group, [1.1, 0.35, 2.05], standard('#30343d', { roughness: 0.5 }), { position: [1.95, 4.5, 0], rotation: [0, 0, -0.18] }); // belt
-  for (const z of [-0.85, 0.85]) {
-    bar(group, [1.75, 4.3], [3.45, 4.15], z, 0.95, trousers); // thigh
-    bar(group, [3.45, 4.25], [3.75, 2.35], z, 0.95, trousers); // shin
-    boxPart(group, [1.35, 0.55, 1.0], shoes, { position: [3.95, 2.05, z] });
-  }
-  for (const z of [-1.3, 1.3]) {
-    bar(group, [2.2, 6.15], [5.25, 5.3], z, 0.85, jacket); // arm out to the grip
-    boxPart(group, [0.6, 0.6, 0.6], standard('#121318', { roughness: 0.6 }), { position: [5.4, 5.25, z] }); // glove
-  }
-  // Head with its face on the front (+x) side, and the hair.
-  const face = new THREE.MeshStandardMaterial({ map: faceTexture(), roughness: 0.6 });
-  boxPart(group, [1.3, 1.25, 1.3], [face, skin, skin, skin, skin, skin], { position: [2.3, 7.15, 0], rotation: [0, 0, -0.1] });
-  boxPart(group, [1.5, 0.5, 1.5], hair, { position: [2.2, 7.9, 0], rotation: [0, 0, -0.1] });
-  boxPart(group, [0.5, 1.2, 1.45], hair, { position: [1.6, 7.35, 0] });
-  for (const [x, z, tilt] of [[2.5, -0.4, 0.5], [2.0, 0.3, -0.3], [2.7, 0.45, 0.2]]) {
-    part(group, new THREE.ConeGeometry(0.35, 0.8, 5), hair, { position: [x, 8.3, z], rotation: [tilt, 0, -0.5] });
-  }
-  return group;
+/**
+ * The rider: Bloxity's own Legion avatar (as the players and the dancers), seated: hips on the seat, thighs
+ * forward, shins down to the pegs, leaning in with the hands on the bars.
+ */
+function legionRider() {
+  const puppet = createLegionPuppet('0');
+  const seat = new THREE.Group();
+  seat.position.set(1.55, 1.75, 0); // its hips (2.4 up in the model, x0.95) land on the seat
+  seat.rotation.y = Math.PI / 2; // the model faces +z; the bike faces +x
+  seat.scale.setScalar(0.95);
+  seat.add(puppet.group);
+  puppet.ready.then(() => {
+    puppet.pose('LegL1', -1.45);
+    puppet.pose('LegR1', -1.45);
+    puppet.pose('LegL2', 1.25);
+    puppet.pose('LegR2', 1.25);
+    puppet.pose('Spine1', -0.3);
+    puppet.pose('ArmL1', -1.15, 0.12);
+    puppet.pose('ArmR1', -1.15, -0.12);
+    puppet.pose('ArmL2', -0.35);
+    puppet.pose('ArmR2', -0.35);
+    puppet.pose('Neck1', 0.25);
+  });
+  return seat;
 }
 
 /**
@@ -189,6 +158,6 @@ export function createBikeRider() {
   tip.rotateZ(Math.PI / 2 - 0.12);
   part(group, tip, standard('#2a2c32', { roughness: 0.6 }), { position: [-1.0, 2.3, 0.85] });
 
-  group.add(rider());
+  group.add(legionRider());
   return { group, rear, front };
 }

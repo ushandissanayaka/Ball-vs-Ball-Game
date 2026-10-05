@@ -6,7 +6,8 @@ import { createRunway } from '../objects/platform/Runway.js';
 import { createSupportBlocks } from '../objects/platform/SupportBlocks.js';
 import { createLeaderboard } from '../objects/props/Leaderboard.js';
 import { createPortal2v2 } from '../objects/props/Portal2v2.js';
-import { createHexPedestal } from '../objects/props/Pedestals.js';
+import { PEDESTAL_TOP, createHexPedestal } from '../objects/props/Pedestals.js';
+import { createDancer } from '../objects/props/Dancer.js';
 import { createFlyersDisplay } from '../objects/props/FlyersDisplay.js';
 import { createExplosionsProjector } from '../objects/props/ExplosionsProjector.js';
 import { createBallsMachine } from '../objects/props/BallsMachine.js';
@@ -37,7 +38,18 @@ export function buildLobby() {
   const weekly = createLeaderboard({ title: weeklyTitle(nextWeeklyReset(now), now), rows: SEED_LEADERBOARDS.weekly });
   root.add(place(allTime.group, PROPS.leaderboardAllTime.position, FLOOR_Y, PROPS.leaderboardAllTime.rotation));
   root.add(place(weekly.group, PROPS.leaderboardWeekly.position, FLOOR_Y, PROPS.leaderboardWeekly.rotation));
-  for (const spot of PROPS.pedestals) root.add(place(createHexPedestal(), spot, FLOOR_Y));
+  // Two dancers on the pedestals, facing the hub, dancing the same routine in step.
+  const dancers = PROPS.pedestals.map((spot) => {
+    const pedestal = place(createHexPedestal(), spot, FLOOR_Y);
+    const dancer = createDancer();
+    dancer.group.position.y = PEDESTAL_TOP;
+    const holder = new THREE.Group();
+    holder.add(dancer.group);
+    holder.scale.setScalar(1.6);
+    pedestal.add(holder);
+    root.add(pedestal);
+    return dancer;
+  });
 
   const stations = [
     [createPortal2v2(), PROPS.portal2v2],
@@ -53,18 +65,24 @@ export function buildLobby() {
   // What the player character walks round: each station as a few circles over its footprint.
   const walkArea = createWalkArea();
   for (const board of [allTime.group, weekly.group]) for (const x of [-16, -6, 6, 16]) walkArea.addObstacle(board, 5, [x, 0]);
-  for (const spot of root.children.filter((child) => child.name === 'hex-pedestal')) walkArea.addObstacle(spot, 5);
+  for (const spot of root.children.filter((child) => child.name === 'hex-pedestal')) walkArea.addObstacle(spot, 7);
   const [portal, flyers, explosions, balls] = stations.map(([group]) => group);
   walkArea.addObstacle(portal, 8.5);
   walkArea.addObstacle(flyers, 7.5);
   walkArea.addObstacle(explosions, 7);
   for (const x of [-6.5, 6.5]) walkArea.addObstacle(balls, 7, [x, 0]);
-  for (const x of [-5.5, 5.5]) walkArea.addObstacle(shop.group, 7.5, [x, 0]);
+  for (const x of [-8, 0, 8]) walkArea.addObstacle(shop.group, 9.5, [x, 0]);
   shop.setEndsIn(formatDayHour(nextLimitedOfferEnd(now) - now));
   // What moves on its own, for the "is it on screen?" check: room round the shop's show (bike, smoke column,
   // chain spike) and the conveyor strips.
   shop.group.updateMatrixWorld(true);
-  const animatedBounds = [new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(-2, 9, 0)), 20), runway.userData.animatedBounds];
+  portal.updateMatrixWorld(true);
+  const [p1, p2] = PROPS.pedestals;
+  const animatedBounds = [
+    new THREE.Sphere(shop.group.localToWorld(new THREE.Vector3(0, 10, 0)), 25), runway.userData.animatedBounds,
+    new THREE.Sphere(portal.localToWorld(new THREE.Vector3(0, 5, 0)), 9),
+    new THREE.Sphere(new THREE.Vector3((p1[0] + p2[0]) / 2, FLOOR_Y + 12, (p1[1] + p2[1]) / 2), Math.hypot(p1[0] - p2[0], p1[1] - p2[1]) / 2 + 16),
+  ];
 
   // Arenas: W1..W5 on the west deck, E1..E5 on the east, north to south.
   const arenas = new Map();
@@ -107,6 +125,8 @@ export function buildLobby() {
   const animate = (seconds) => {
     shop.update(seconds);
     runway.userData.animate(seconds);
+    for (const dancer of dancers) dancer.dance(seconds);
+    portal.userData.update(seconds);
   };
   /** Moves the arenas' VS boards; true while any is still moving. */
   const updateArenas = (dt) => {

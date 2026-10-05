@@ -25,10 +25,10 @@ import { createBikeRider } from './BikeRider.js';
 
 export const PERIOD = 10;
 
-const BIKE_AT = new THREE.Vector3(8.4, 1.4, -4.2); // where the rear tyre touches the plinth
-const BIKE_SCALE = 1.2;
+const BIKE_AT = new THREE.Vector3(10, 1.4, -5); // where the rear tyre touches the plinth
+const BIKE_SCALE = 1.6; // big enough for the Legion rider on it
 // Heading left and toward the viewer, three-quarters side on so the wheelie reads: local +x turned to (-0.85, 0, 0.53).
-const BIKE_YAW = -2.58;
+const BIKE_YAW = -2.17; // facing the spawn point (the hub's middle), where players start
 const BIKE_BACK = new THREE.Vector3(0.85, 0, -0.53); // the way the rear-wheel smoke blows
 const SUMMON = new THREE.Vector3(-2.6, 1.4, -1.2); // floor point under the ball and the figure
 const BALL_HEIGHT = 10.5;

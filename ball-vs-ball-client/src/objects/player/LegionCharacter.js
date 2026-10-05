@@ -181,3 +181,45 @@ export function createLegionCharacter(avatarSpec) {
 
   return { group, ready, update, headPosition, flinch };
 }
+
+/**
+ * A Legion figure to pose by hand (the lobby's dancers and the bike rider): Bloxity's avatar body in a Legion skin,
+ * the same as the players', with every joint (shoulders, elbows, hips, knees, neck, spine) turned in the model's
+ * own terms. Returns { group, ready, pose(name, pitch, roll, yaw) }: `pitch` swings a limb forward (-) or back
+ * (+), `roll` out to the side (+ for the left side, at +x), `yaw` twists it. Joints: Spine1, Neck1, ArmL1, ArmL2,
+ * ArmR1, ArmR2, LegL1, LegL2, LegR1, LegR2. It is 6.4 units tall with its feet at 0, facing +Z.
+ */
+export function createLegionPuppet(skinId = '0') {
+  const group = new THREE.Group();
+  group.userData.dynamic = true; // posed every frame: keep it out of static batching
+  const joints = {};
+  const qx = new THREE.Quaternion();
+  const qz = new THREE.Quaternion();
+  const qy = new THREE.Quaternion();
+  const ready = loadAvatar({ equipped: { skinId } }).then(({ model, bones }) => {
+    group.add(model);
+    model.updateMatrixWorld(true);
+    const modelWorld = model.getWorldQuaternion(new THREE.Quaternion());
+    for (const name of ['Spine1', 'Neck1', 'ArmL1', 'ArmL2', 'ArmR1', 'ArmR2', 'LegL1', 'LegL2', 'LegR1', 'LegR2']) {
+      const bone = bones[name];
+      if (!bone) continue;
+      // The model's X, Y and Z axes as the bone's parent sees them (at rest).
+      const toParent = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(modelWorld);
+      joints[name] = {
+        bone, rest: bone.quaternion.clone(),
+        x: new THREE.Vector3(1, 0, 0).applyQuaternion(toParent),
+        y: new THREE.Vector3(0, 1, 0).applyQuaternion(toParent),
+        z: new THREE.Vector3(0, 0, 1).applyQuaternion(toParent),
+      };
+    }
+  }).catch((error) => console.info('Legion avatar unavailable for a lobby figure:', error?.message ?? error));
+  const pose = (name, pitch = 0, roll = 0, yaw = 0) => {
+    const joint = joints[name];
+    if (!joint) return;
+    qx.setFromAxisAngle(joint.x, pitch);
+    qz.setFromAxisAngle(joint.z, roll);
+    qy.setFromAxisAngle(joint.y, yaw);
+    joint.bone.quaternion.copy(qy).multiply(qz).multiply(qx).multiply(joint.rest);
+  };
+  return { group, ready, pose };
+}
