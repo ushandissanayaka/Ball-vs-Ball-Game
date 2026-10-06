@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { getFriends } from '../../../bloxity/sdk.js';
+import { getFriends, hasBloxity } from '../../../bloxity/sdk.js';
+import { GemsPrice } from '../../hooks/useBloxity.js';
 import { BuxMark } from '../../icons/PopupIcons.jsx';
 import { PlaceholderCube, SearchIcon } from '../../icons/ItemArt.jsx';
 
-// Shown when the portal has no friends list to give (a local preview): sample friends, like the Trade tab's players.
+// Shown in a local preview without the Bloxity SDK: sample friends, like the Trade tab's players (never gifted to).
 const SAMPLE_FRIENDS = [
   { id: 's1', name: 'Pader', handle: 'Exyonea', hue: 120 },
   { id: 's2', name: 'ripvn56762', handle: 'ripvn56762', hue: 20 },
@@ -21,13 +22,14 @@ export default function GiftModal({ item, onClose, onSend }) {
     let live = true;
     getFriends().then((list) => {
       if (!live) return;
-      setFriends(list.length ? list.map((f) => ({ ...f, handle: f.name.toLowerCase() })) : SAMPLE_FRIENDS);
+      setFriends(hasBloxity() ? list.map((f) => ({ ...f, handle: f.username || f.name.toLowerCase() })) : SAMPLE_FRIENDS);
     });
     return () => { live = false; };
   }, []);
   const shown = (friends ?? []).filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()));
   const select = (friend) => {
     setPicked(friend.id);
+    if (!hasBloxity()) return; // a sample friend
     onSend(friend, item);
   };
   return (
@@ -43,7 +45,7 @@ export default function GiftModal({ item, onClose, onSend }) {
           <PlaceholderCube className="gift-item-cube" />
           <div>
             <div className="gift-item-name">{item.name}</div>
-            <div className="gift-item-price"><BuxMark className="gift-bux" />{item.bux}</div>
+            <div className="gift-item-price"><BuxMark className="gift-bux" /><GemsPrice sku={item.id} fallback={item.bux} /></div>
           </div>
         </div>
         <label className="gift-search">

@@ -7,6 +7,7 @@ import { lobbyRouter } from './routes/lobby.js';
 import { sessionRouter } from './routes/session.js';
 import { arenaRouter } from './routes/arena.js';
 import { shopRouter } from './routes/shop.js';
+import { purchaseRouter } from './routes/purchases.js';
 import { flushProfiles } from './progress/profileStore.js';
 import { attachPresence } from './players/presence.js';
 
@@ -20,6 +21,7 @@ app.use(lobbyRouter());
 app.use(sessionRouter());
 app.use(arenaRouter());
 app.use(shopRouter());
+app.use(purchaseRouter());
 app.use((_request, response) => response.status(404).json({ error: 'Not found' }));
 
 const server = app.listen(config.port, '0.0.0.0', () => {

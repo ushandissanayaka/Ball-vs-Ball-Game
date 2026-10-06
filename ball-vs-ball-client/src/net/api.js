@@ -1,7 +1,8 @@
 import { ROUTES, arenaIds, DUEL, nextLimitedOfferEnd, nextWeeklyReset, LIMITED_OFFER, DAILY_QUESTS, nextDailyReset } from '../shared/constants.js';
 import { SEED_ARENA_PLAYERS, SEED_LEADERBOARDS, STARTER_PROFILE } from '../shared/lobbySeed.js';
 import { levelInfo } from '../shared/levels.js';
-import { STARTER_BALLS, buyStoreItem, claimDailyGems, claimDailyReward, fuseItem, newDailyState, openCrate as openCrateLocally, publicDaily, refreshDaily } from '../shared/rewards.js';
+import { STARTER_BALLS, buyStoreItem, claimDailyGems, claimDailyReward, fuseItem, grantPurchase, newDailyState, openCrate as openCrateLocally, publicDaily, refreshDaily } from '../shared/rewards.js';
+import { getToken } from '../bloxity/sdk.js';
 
 // Talks to the game server (Render). Every call falls back to the shared sample data, so the lobby still looks
 // complete when the server is asleep or unreachable.
@@ -98,7 +99,10 @@ export async function fetchArenas() {
   }
 }
 
-/** Opens a guest session (remembering the guest id in this browser); falls back to the starter profile. */
+/**
+ * Opens a session (remembering the guest id in this browser); falls back to the starter profile. Signed in to
+ * Bloxity, the session plays as that account (the server checks the token with Bloxity): { account: { id, name } }.
+ */
 let sessionToken = null;
 
 /** This guest's session token (null while offline). */
@@ -112,7 +116,7 @@ export async function openSession() {
     // Storage blocked (private mode): a new guest each visit.
   }
   try {
-    const session = await request(ROUTES.session, { method: 'POST', body: JSON.stringify({ guestId }) });
+    const session = await request(ROUTES.session, { method: 'POST', body: JSON.stringify({ guestId, bloxityToken: getToken() }) });
     try {
       localStorage.setItem(GUEST_KEY, session.guestId);
     } catch {
@@ -121,7 +125,7 @@ export async function openSession() {
     sessionToken = session.sessionToken;
     return { ...session, online: true };
   } catch {
-    return { guestId, sessionToken: null, profile: offlineProfile(), online: false };
+    return { guestId, account: null, sessionToken: null, profile: offlineProfile(), online: false };
   }
 }
 
@@ -205,3 +209,24 @@ export const buyItem = (item, profile) => shopAction(ROUTES.storeBuy, { item }, 
 export const openCrate = (crate, count, profile) => shopAction(ROUTES.crateOpen, { crate, count }, profile, (next) => openCrateLocally(next, crate, count));
 export const claimGems = (profile) => shopAction(ROUTES.dailyGems, {}, profile, (next, now) => claimDailyGems(next, now));
 export const fuse = (kind, id, mode, profile) => shopAction(ROUTES.fuse, { kind, id, mode }, profile, (next) => fuseItem(next, kind, id, mode));
+
+/**
+ * After Bloxity has taken the Gems for `sku` (transaction `transactionId`): waits for the server to grant it (it
+ * hears from Bloxity's webhook) and resolves to { profile } once it has, or { pending: true } if it hasn't yet
+ * after a while (it will still arrive). Offline, the product is granted to this copy of `profile`.
+ */
+export async function confirmPurchase(sku, transactionId, profile) {
+  const until = Date.now() + 20_000;
+  for (let attempt = 0; Date.now() < until; attempt += 1) {
+    let status;
+    try {
+      status = await withSession(ROUTES.purchaseStatus, { transactionId });
+    } catch (error) {
+      if (!error.status && attempt === 0) return applyOffline(profile, (next) => grantPurchase(next, sku));
+      status = null;
+    }
+    if (status?.granted) return { profile: status.profile };
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  return { pending: true };
+}

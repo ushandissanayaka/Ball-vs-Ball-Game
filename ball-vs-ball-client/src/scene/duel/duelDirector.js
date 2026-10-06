@@ -114,10 +114,7 @@ export function createDuelDirector({ scene, camera, canvas, renderer, arenas, ch
   };
 
   // ---- Joining and leaving ---------------------------------------------------------------------------
-  const avatarForServer = () => {
-    const spec = getAvatarSpec();
-    return { skinUrl: spec.skinUrl, skinId: spec.equipped?.skinId };
-  };
+  const avatarForServer = getAvatarSpec;
 
   /** My picture for the board (a texture, straight away) and the HUD (a bitmap, read back without a stall). */
   function takeMyPicture(mySeat) {

@@ -35,14 +35,40 @@ function newProfile(now) {
 export function getOrCreateProfile(requestedId, now) {
   const saved = typeof requestedId === 'string' && GUEST_ID.test(requestedId) ? getProfile(requestedId) : null;
   const guestId = saved ? requestedId : randomUUID();
+  return { guestId, profile: freshen(guestId, saved, now) };
+}
+
+/** The save as it is played now: a new one for a missing or older-version save, with anything new filled in. */
+function freshen(key, saved, now) {
   const current = saved?.version === STARTER_PROFILE.version;
   const profile = current ? saved : newProfile(now);
   // Saves from before levels: count from no wins.
   if (typeof profile.wins !== 'number') profile.wins = 0;
   if (!Array.isArray(profile.boughtBalls)) profile.boughtBalls = [];
   const changed = [refreshDailyQuests(profile, now), ensureInventory(profile, now), refreshDaily(profile, now)].some(Boolean);
-  if (!current || changed) setProfile(guestId, profile);
-  return { guestId, profile };
+  if (!current || changed) setProfile(key, profile);
+  return profile;
+}
+
+/** Where a Bloxity account's progress is saved (guest ids can't take this form: GUEST_ID has no ':'). */
+export const accountKey = (accountId) => `legion:${accountId}`;
+
+/**
+ * A Bloxity account's saved profile: { key, profile }. The first time an account signs in it takes over the
+ * progress the player made as guest `guestId` on this device (each guest's progress goes to one account only).
+ */
+export function getOrCreateAccountProfile(accountId, guestId, now) {
+  const key = accountKey(accountId);
+  let saved = getProfile(key);
+  if (!saved) {
+    const guest = typeof guestId === 'string' && GUEST_ID.test(guestId) ? getProfile(guestId) : null;
+    if (guest && !guest.adoptedBy && guest.version === STARTER_PROFILE.version) {
+      saved = structuredClone(guest);
+      guest.adoptedBy = key;
+      setProfile(guestId, guest);
+    }
+  }
+  return { key, profile: freshen(key, saved, now) };
 }
 
 /** @returns {import('../shared/types.js').PublicProfile} */

@@ -5,6 +5,7 @@ import BallIcon from '../icons/BallIcon.jsx';
 import { CoinIcon, GemIcon, HeartIcon, RefreshIcon } from '../icons/Icons.jsx';
 import QueuePanel from './QueuePanel.jsx';
 import PurchasePrompt from '../popups/PurchasePrompt.jsx';
+import { GEM_PACKS, earlyBallSku, gemPackSku } from '../../shared/rewards.js';
 
 /** A player's picture (an ImageBitmap of their character's head and shoulders), drawn into a canvas. */
 function Portrait({ picture }) {
@@ -95,7 +96,7 @@ function AllBallsPanel({ secondsLeft, current, allowed, onPick, onClose }) {
         )))}
       </div>
       {buying && (
-        <PurchasePrompt item={{ id: `ball_${buying}`, name: BALLS[buying].name, bux: ballPrice(buying) }} onClose={() => setBuying(null)} />
+        <PurchasePrompt item={{ id: earlyBallSku(buying), name: BALLS[buying].name, bux: ballPrice(buying) }} onClose={() => setBuying(null)} />
       )}
       <div className="all-balls-buttons">
         <button type="button" className="all-balls-no outlined" onClick={onClose}>NO</button>
@@ -145,7 +146,7 @@ function ChoosePanel({ duel, gems, actions }) {
           </section>
         </>
       )}
-      {buying && <PurchasePrompt item={{ id: 'gems_100', name: '100 Diamonds', bux: 99 }} onClose={() => setBuying(false)} />}
+      {buying && <PurchasePrompt item={{ id: gemPackSku(GEM_PACKS[0]), name: `${GEM_PACKS[0].gems} Diamonds`, bux: GEM_PACKS[0].bux }} onClose={() => setBuying(false)} />}
     </>
   );
 }

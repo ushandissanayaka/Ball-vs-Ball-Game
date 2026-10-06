@@ -31,6 +31,8 @@ const FriendsIcon = () => (
   </svg>
 );
 
+const STATUS = { online: 'Online', 'in-game': 'In a game', away: 'Away', offline: 'Offline' };
+
 /** A friend's round picture, or their initial when they have none. */
 function FriendAvatar({ friend }) {
   const [broken, setBroken] = useState(false);
@@ -122,7 +124,7 @@ export default function InviteFriends({ onClose }) {
                 <FriendAvatar friend={friend} />
                 <span className="invite-friend-name">
                   {friend.name}
-                  <small>{friend.online ? 'Online' : 'Offline'}</small>
+                  <small>{STATUS[friend.status] ?? 'Offline'}</small>
                 </span>
                 <button type="button" className="invite-send" disabled={state === 'sending' || state === 'sent'} onClick={() => invite(friend)}>
                   {state === 'sent' ? 'Invited' : state === 'sending' ? 'Sending...' : state === 'failed' ? 'Try again' : 'Invite'}

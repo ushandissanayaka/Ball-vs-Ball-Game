@@ -20,6 +20,8 @@ export const ROUTES = {
   crateOpen: '/api/crate/open',
   dailyGems: '/api/gems/daily',
   fuse: '/api/fuse',
+  purchaseStatus: '/api/purchase/status',
+  bloxityWebhook: '/api/bloxity/webhook',
 };
 
 /** 1v1 duel arenas along the runway: `arenasPerSide` on the west (W) and east (E) platforms. */

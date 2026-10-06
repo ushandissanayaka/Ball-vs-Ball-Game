@@ -3,36 +3,26 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { dotTexture } from '../../effects/glowTextures.js';
+import { isTrustedSkinUrl, skinTextureUrl } from '../../shared/avatar.js';
+import { CDN, applyProportions, avatarMaterial, captureRest, dressAvatar, loadPixelTexture, swapBodyParts, wearsBodyParts } from './avatarItems.js';
 
 /*
  * The player's Legion (Bloxity) character: Bloxity's base avatar body (player.glb, the one the portal uses) dressed
- * in the player's own skin texture (face, shirt and trousers drawn on it), from the Legion SDK. It walks by
- * swinging the hip and shoulder bones each frame; one skinned character costs next to nothing to draw. If the
- * avatar can't be loaded (offline, blocked), a blocky stand-in in the same proportions takes its place.
+ * as the player's avatar, from the Legion SDK: the skin texture (face, shirt and trousers drawn on it), swapped
+ * body parts, proportions, and worn items (see avatarItems.js). It walks by swinging the hip and shoulder bones
+ * each frame; one skinned character costs next to nothing to draw. If the avatar can't be loaded (offline,
+ * blocked), a blocky stand-in in the same proportions takes its place.
  *
  * The model is 6.4 units tall with its feet at 0, facing +Z. It moves, so it casts no real shadow (the shadow map
  * is drawn once); a soft blob shadow sits under its feet instead. Its meshes are also on layer 1, so the headshot
  * camera can picture the character alone.
  */
 
-const CDN = 'https://static.bloxity.io/avatars';
 export const CHARACTER_HEIGHT = 5.4;
 const SCALE = CHARACTER_HEIGHT / 6.4;
 export const HEADSHOT_LAYER = 1;
 
-/** Only Bloxity's own hosts may supply the skin texture URL. */
-const trustedSkinUrl = (url) => typeof url === 'string' && /^https:\/\/(api|static)\.bloxity\.io\/[\w./-]+\.png$/.test(url);
-const equipped = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id) && !['-1', 'undefined', 'null'].includes(id);
-
-async function loadSkin(url) {
-  const texture = await new THREE.TextureLoader().setCrossOrigin('anonymous').loadAsync(url);
-  texture.flipY = false; // GLB UVs
-  texture.magFilter = THREE.NearestFilter; // crisp pixel-art skins
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
+const loadSkin = (url) => loadPixelTexture(url, false); // GLB UVs
 
 // The avatar body, downloaded and parsed once; every character wears a clone of it (opponents, players seen on
 // the arenas), so another player appearing costs no new parse.
@@ -40,44 +30,59 @@ async function loadSkin(url) {
  * The body's six parts (head, torso, arms, legs) share one skeleton, one material and one place, so they are
  * merged into a single skinned mesh: the same picture in one draw instead of six, for every character.
  */
-function mergeParts(gltf) {
+function mergeParts(root, ownGeometry = false) {
   const parts = [];
-  gltf.scene.traverse((object) => { if (object.isSkinnedMesh) parts.push(object); });
-  if (parts.length < 2 || parts.some((part) => part.skeleton !== parts[0].skeleton)) return gltf;
+  root.traverse((object) => { if (object.isSkinnedMesh) parts.push(object); });
+  if (parts.length < 2 || parts.some((part) => part.skeleton !== parts[0].skeleton)) return root;
   const geometry = mergeGeometries(parts.map((part) => part.geometry));
-  if (!geometry) return gltf;
+  if (!geometry) return root;
   const [first] = parts;
   const merged = new THREE.SkinnedMesh(geometry, first.material);
   merged.name = 'avatar';
+  merged.userData.ownGeometry = ownGeometry;
   first.parent.add(merged);
   merged.bind(first.skeleton, first.bindMatrix);
   for (const part of parts) part.removeFromParent();
-  return gltf;
+  return root;
 }
 
 // A sphere round any pose the avatar takes (arms up, a spin, sat on the bike), in its own units: lets the
 // renderer skip characters off screen without working out each pose's bounds.
 const POSE_BOUNDS = new THREE.Sphere(new THREE.Vector3(0, 3.8, 0), 6.5);
 
+// { parts: the body as downloaded (six parts, for avatars that swap some), merged: the same merged into one }
 let avatarBody = null;
 const loadBody = () => {
-  avatarBody ??= new GLTFLoader().loadAsync(`${CDN}/player.glb`).then(mergeParts).catch((error) => {
+  avatarBody ??= new GLTFLoader().loadAsync(`${CDN}/player.glb`).then((gltf) => ({
+    parts: cloneSkinned(gltf.scene),
+    merged: mergeParts(gltf.scene),
+  })).catch((error) => {
     avatarBody = null; // try again next time
     throw error;
   });
   return avatarBody;
 };
 
-/** Bloxity's avatar body in the player's skin; `bones` by name. */
+/**
+ * Bloxity's avatar body dressed as `spec` ({ equipped, proportions, skinUrl }): `root` holds `model` (the body,
+ * `bones` by name) and any hand and shoe pairs; `tick` moves those pairs after each pose (or is null).
+ */
 async function loadAvatar(spec) {
-  const skinId = spec?.equipped?.skinId;
-  const skinUrl = trustedSkinUrl(spec?.skinUrl) ? spec.skinUrl : `${CDN}/skins/${equipped(skinId) ? skinId : '0'}.png`;
-  const [gltf, skin] = await Promise.all([
+  const equipped = spec?.equipped ?? {};
+  const skinUrl = isTrustedSkinUrl(spec?.skinUrl) ? spec.skinUrl : skinTextureUrl(equipped);
+  const [body, skin] = await Promise.all([
     loadBody(),
     loadSkin(skinUrl).catch(() => loadSkin(`${CDN}/skins/0.png`)),
   ]);
-  const model = cloneSkinned(gltf.scene);
-  const material = new THREE.MeshStandardMaterial({ map: skin, roughness: 0.7, emissive: 0xffffff, emissiveMap: skin, emissiveIntensity: 0.25 });
+  let model;
+  if (wearsBodyParts(equipped)) {
+    model = cloneSkinned(body.parts);
+    await swapBodyParts(model, equipped);
+    mergeParts(model, true);
+  } else {
+    model = cloneSkinned(body.merged);
+  }
+  const material = avatarMaterial(skin);
   const bones = {};
   model.traverse((object) => {
     if (object.isBone) bones[object.name] = object;
@@ -88,7 +93,12 @@ async function loadAvatar(spec) {
       object.boundingSphere = POSE_BOUNDS.clone();
     }
   });
-  return { model, bones };
+  const rest = captureRest(model, bones);
+  const proportions = applyProportions(model, bones, spec?.proportions);
+  const root = new THREE.Group();
+  root.add(model);
+  const tick = await dressAvatar(root, model, bones, rest, equipped, proportions);
+  return { root, model, bones, tick };
 }
 
 /** The stand-in when the avatar can't be loaded: classic blocky body, same height. */
@@ -113,25 +123,29 @@ function blockyAvatar() {
     return pivot;
   };
   const bones = { ArmL1: limb(1.8, 4.8, skin), ArmR1: limb(-1.8, 4.8, skin), LegL1: limb(0.6, 2.4, pants), LegR1: limb(-0.6, 2.4, pants) };
-  return { model, bones, blocky: true };
+  return { root: model, model, bones, blocky: true };
 }
 
 /** Takes a character out of the scene and frees what is its own (the avatar body and the shadow dot are shared). */
 export function disposeCharacter(character) {
   character.group.removeFromParent();
-  character.group.traverse((object) => {
-    if (!object.isMesh) return;
-    if (!object.isSkinnedMesh) object.geometry.dispose();
-    if (object.material.map !== dotTexture()) object.material.map?.dispose();
-    object.material.dispose();
-  });
+  character.group.traverse(disposeMesh);
+}
+
+/** Frees a mesh's own geometry, texture and material (not those every character, or every wearer of an item, shares). */
+function disposeMesh(object) {
+  if (!object.isMesh || object.userData.shared) return;
+  if (!object.isSkinnedMesh || object.userData.ownGeometry) object.geometry.dispose();
+  if (object.material.map !== dotTexture()) object.material.map?.dispose();
+  object.material.dispose();
 }
 
 /**
- * The character. Returns { group, ready, update(dt, speed), headPosition(target), flinch() }: `group` sits at
+ * The character. Returns { group, ready, update(dt, speed), headPosition(target), flinch(), setAvatar(spec) }: `group` sits at
  * the feet; `update` returns true on the frame a foot comes down while walking (for footstep sounds);
  * the feet and turns to face where it walks (`group.rotation.y`); `speed` 0..1 drives the walk cycle;
- * `flinch()` knocks it back for a moment (hit in a duel).
+ * `flinch()` knocks it back for a moment (hit in a duel); `setAvatar(spec)` dresses it anew (the player changed
+ * their avatar), resolving once the new look is on.
  */
 export function createLegionCharacter(avatarSpec) {
   const group = new THREE.Group();
@@ -147,11 +161,14 @@ export function createLegionCharacter(avatarSpec) {
   shadow.position.y = 0.06;
   group.add(shadow);
 
-  let rig = null; // { bones, swing: [{ bone, rest, axis, sign, amount }] }
-  const use = ({ model, bones, blocky }) => {
-    body.clear();
-    body.add(model);
-    model.traverse((object) => { if (object.isMesh) object.layers.enable(HEADSHOT_LAYER); });
+  let rig = null; // { bones, swing: [{ bone, rest, axis, sign, amount }], blocky, tick }
+  const use = ({ root, model, bones, blocky, tick = null }) => {
+    for (const old of [...body.children]) {
+      old.removeFromParent();
+      old.traverse(disposeMesh);
+    }
+    body.add(root);
+    root.traverse((object) => { if (object.isMesh) object.layers.enable(HEADSHOT_LAYER); });
     model.updateMatrixWorld(true);
     // Each swinging bone turns about the model's own left-right (X) axis, expressed in its parent's space.
     const swing = [['LegL1', 1, 0.75], ['LegR1', -1, 0.75], ['ArmL1', -1, 0.6], ['ArmR1', 1, 0.6]].flatMap(([name, sign, amount]) => {
@@ -162,12 +179,21 @@ export function createLegionCharacter(avatarSpec) {
       const axis = new THREE.Vector3(1, 0, 0).applyQuaternion(modelWorld).applyQuaternion(parentWorld.invert());
       return [{ bone, rest: bone.quaternion.clone(), axis, sign, amount }];
     });
-    rig = { bones, swing, blocky };
+    rig = { bones, swing, blocky, tick };
   };
   use(blockyAvatar());
-  const ready = loadAvatar(avatarSpec).then(use, (error) => {
-    console.info('Legion avatar unavailable, using the stand-in:', error?.message ?? error);
-  });
+  // Only the latest look is put on (an older download finishing late is dropped).
+  let wanted = 0;
+  const setAvatar = (spec) => {
+    const mine = (wanted += 1);
+    return loadAvatar(spec).then((look) => {
+      if (mine === wanted) use(look);
+      else look.root.traverse(disposeMesh);
+    }, (error) => {
+      console.info('Legion avatar unavailable, using the stand-in:', error?.message ?? error);
+    });
+  };
+  const ready = setAvatar(avatarSpec);
 
   let cycle = 0;
   let stride = 0;
@@ -184,6 +210,7 @@ export function createLegionCharacter(avatarSpec) {
       turn.setFromAxisAngle(axis, Math.sin(cycle) * amount * stride * sign);
       bone.quaternion.copy(turn).multiply(rest);
     }
+    rig.tick?.(); // hand and shoe items follow the pose
     body.position.y = Math.abs(Math.sin(cycle)) * 0.18 * stride; // a little bob in each step
     // Knocked back: tips away from the hit and wobbles upright again.
     flinchLeft = Math.max(0, flinchLeft - dt);
@@ -205,7 +232,7 @@ export function createLegionCharacter(avatarSpec) {
     return group.getWorldPosition(target).add(new THREE.Vector3(0, CHARACTER_HEIGHT * 0.88, 0));
   };
 
-  return { group, ready, update, headPosition, flinch };
+  return { group, ready, update, headPosition, flinch, setAvatar };
 }
 
 /**

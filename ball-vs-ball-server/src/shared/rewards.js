@@ -1,5 +1,6 @@
 import { utcDayKey } from './constants.js';
 import { KINDS } from './catalog.js';
+import { BALL_IDS } from './balls.js';
 
 // Daily rewards, the daily store, crates, Daily Diamonds and the inventory. The server applies these to saved profiles; the client
 // applies the same rules to its own copy when the server can't be reached.
@@ -125,6 +126,47 @@ export function buyStoreItem(profile, itemId) {
   profile.coins -= item.price.coins;
   addItem(profile, item.kind, item.id);
   return null;
+}
+
+/**
+ * Gems products: what is sold for Bloxity Gems, by sku (the id Bloxity's catalog lists it under; Bloxity sets the
+ * price). 'gems_<n>' is a diamond pack, 'ball_<ball>' unlocks a ball before its level, and the rest are the
+ * Daily Store's Gems items and the limited bundle.
+ */
+export const gemPackSku = (pack) => `gems_${pack.gems}`;
+export const earlyBallSku = (ball) => `ball_${ball}`;
+export const BUNDLE_SKU = `${LIMITED_BUNDLE.id}_bundle`;
+export const BUNDLE_BALL_SKU = `${LIMITED_BUNDLE.ballOnly.id}_ball`;
+
+/**
+ * Gives what Gems product `sku` buys (once Bloxity has taken the Gems). Returns null, or 'unknown' for a sku this
+ * game doesn't sell.
+ */
+export function grantPurchase(profile, sku) {
+  const pack = GEM_PACKS.find((entry) => gemPackSku(entry) === sku);
+  if (pack) {
+    profile.gems += pack.gems;
+    return null;
+  }
+  const item = DAILY_STORE.find((entry) => entry.id === sku && entry.price.bux);
+  if (item) {
+    addItem(profile, item.kind, item.id);
+    return null;
+  }
+  if (sku === BUNDLE_SKU) {
+    for (const entry of LIMITED_BUNDLE.items) addItem(profile, entry.kind, entry.id);
+    return null;
+  }
+  if (sku === BUNDLE_BALL_SKU) {
+    addItem(profile, 'ball', LIMITED_BUNDLE.ballOnly.id);
+    return null;
+  }
+  const ball = typeof sku === 'string' && sku.startsWith('ball_') ? sku.slice(5) : null;
+  if (ball && BALL_IDS.includes(ball)) {
+    if (!profile.boughtBalls?.includes(ball)) profile.boughtBalls = [...(profile.boughtBalls ?? []), ball];
+    return null;
+  }
+  return 'unknown';
 }
 
 /** One prize from `crate`: a rarity by its odds, then any item of that rarity. `random` returns 0..1. */

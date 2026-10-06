@@ -11,6 +11,11 @@ let sfxBus = null;
 let reverbIn = null;
 let noiseBuffer = null;
 const starters = [];
+// The player's volume settings (0..1, from the portal's menu), on top of the mix's own levels.
+const MASTER_LEVEL = 0.9;
+const MUSIC_LEVEL = 0.55;
+let masterVolume = 1;
+let musicVolume = 1;
 
 export const audioContext = () => ctx;
 export const buses = () => ({ musicBus, sfxBus, reverbIn });
@@ -48,13 +53,13 @@ function start() {
   compressor.attack.value = 0.004;
   compressor.release.value = 0.25;
   master = ctx.createGain();
-  master.gain.value = 0.9;
+  master.gain.value = MASTER_LEVEL * masterVolume;
   master.connect(compressor).connect(ctx.destination);
 
   musicDuck = ctx.createGain();
   musicDuck.connect(master);
   musicBus = ctx.createGain();
-  musicBus.gain.value = 0.55;
+  musicBus.gain.value = MUSIC_LEVEL * musicVolume;
   musicBus.connect(musicDuck);
 
   sfxBus = ctx.createGain();
@@ -80,6 +85,18 @@ function start() {
 }
 
 export const sharedNoise = () => noiseBuffer;
+
+const level = (value) => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1);
+/** The overall volume, 0..1 (the portal's master volume). */
+export function setMasterVolume(value) {
+  masterVolume = level(value);
+  master?.gain.setTargetAtTime(MASTER_LEVEL * masterVolume, ctx.currentTime, 0.05);
+}
+/** The music's volume, 0..1 (the portal's music volume). */
+export function setMusicVolume(value) {
+  musicVolume = level(value);
+  musicBus?.gain.setTargetAtTime(MUSIC_LEVEL * musicVolume, ctx.currentTime, 0.05);
+}
 
 /**
  * Switches the sound on now. It plays straight away when the browser allows it (the player has already clicked
