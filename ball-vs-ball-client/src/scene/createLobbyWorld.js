@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { CAMERA, SPAWN } from '../config/layout.js';
-import { getAvatarSpec, getPlayerName } from '../bloxity/sdk.js';
+import { attachChatBubble, chatBubbleSeconds, chatBubbleText, getAvatarSpec, getPlayerName, playerInRoom, playerJoined } from '../bloxity/sdk.js';
 import { readMove, startPlayerInput, stopPlayerInput, takeJump } from '../controls/playerInput.js';
 import { conveyorPush } from '../objects/platform/Runway.js';
-import { createLegionCharacter } from '../objects/player/LegionCharacter.js';
+import { CHARACTER_HEIGHT, createLegionCharacter } from '../objects/player/LegionCharacter.js';
 import { createDuelDirector } from './duel/duelDirector.js';
 import { createDuelWarmup, warmUpRenderer } from './duel/duelWarmup.js';
 import { createArenaWatch } from './duel/arenaWatch.js';
 import { createHeadshot } from './headshot.js';
-import { createRemotePlayers } from './remotePlayers.js';
+import { NAME_LIFT, createRemotePlayers } from './remotePlayers.js';
 import { createStickerBubbles, warmStickers } from './stickers.js';
 import { idle } from './headshot.js';
 import { stickerSound } from '../audio/sfx.js';
@@ -31,13 +31,19 @@ const CHARACTER_RADIUS = 1.3;
 const EYE_HEIGHT = 4.2; // the camera orbits this far above the character's feet
 // A jump: up at `speed`, pulled back by `gravity` (about 4 units high, 0.7 s in the air).
 const JUMP = { speed: 24, gravity: 70 };
+// Chat bubbles: their size, and how high they float (over the head; over the name tag on other players).
+const BUBBLE_SCALE = 2.2;
+const BUBBLE_OVER_HEAD = CHARACTER_HEIGHT + 1.8;
+const BUBBLE_OVER_NAME = CHARACTER_HEIGHT + NAME_LIFT + 2.6;
 
 /**
  * The 3D lobby on `canvas`. Only the sea moves, so while the camera is still the picture is redrawn just often
  * enough for the water (the quality's waterFps); camera moves, new data and resizes draw at once. That keeps
  * phones cool and batteries full.
  */
-export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () => {}, onProfile = () => {}, allowedBalls = () => null } = {}) {
+export function createLobbyWorld(canvas, {
+  quality = 'High', onDuelChange = () => {}, onProfile = () => {}, allowedBalls = () => null, onPicture = () => {},
+} = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   // Checking every shader for errors after compiling makes the browser wait for it to finish (a stall each time a
@@ -70,13 +76,19 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   // Debug: ?spawn=x,z starts the character somewhere else (e.g. on an arena square, for screenshots).
   const spawnParam = new URLSearchParams(window.location.search).get('spawn')?.split(',').map(Number);
   const spawn = spawnParam?.length === 2 && spawnParam.every(Number.isFinite) ? spawnParam : SPAWN.position;
-  character.group.position.set(spawn[0], lobby.walkArea.groundAt(...spawn), spawn[1]);
-  character.group.rotation.y = SPAWN.facing;
+  const placeAtSpawn = () => {
+    character.group.position.set(spawn[0], lobby.walkArea.groundAt(...spawn), spawn[1]);
+    character.group.rotation.y = SPAWN.facing;
+  };
+  placeAtSpawn();
   scene.add(character.group);
   const headshot = createHeadshot(renderer, scene, character);
+  /** The character's face for the HUD's profile (an ImageBitmap to `onPicture`), taken again when the avatar changes. */
+  const sharePicture = () => headshot.toImage().then(onPicture, () => {});
   character.ready.then(() => {
     character.update(0, 0);
     headshot.capture();
+    sharePicture();
     needsRender = true;
   });
 
@@ -111,6 +123,44 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
   };
   let presence = null;
   const offline = new URLSearchParams(window.location.search).has('bot');
+
+  // ---- Bloxity: chat over heads, respawns, avatar changes ----
+  let bubblesUntil = 0; // the frame keeps being drawn while a chat bubble shows or fades
+  let chatOn = true;
+  /**
+   * A chat message (from the Bloxity SDK) over its sender's head: one's own over one's character, anyone else's
+   * just above their name tag. Players not in this room are skipped.
+   */
+  const showChat = (message) => {
+    if (!chatOn) return;
+    const sender = message.isLocalPlayer ? character : others.characterOf(message);
+    if (!sender) return;
+    const seconds = chatBubbleSeconds();
+    const bubble = attachChatBubble(THREE, sender.group, chatBubbleText(message), {
+      height: message.isLocalPlayer ? BUBBLE_OVER_HEAD : BUBBLE_OVER_NAME, scale: BUBBLE_SCALE, seconds,
+    });
+    if (bubble) bubblesUntil = Math.max(bubblesUntil, performance.now() + seconds * 1000 + 100);
+    requestRender();
+  };
+  const setChatEnabled = (on) => { chatOn = on; };
+  /** Back to the spawn point (the portal's Respawn), off any duel square first. */
+  const respawn = () => {
+    if (duel.seated) duel.actions.leave();
+    airborne = false;
+    rise = 0;
+    placeAtSpawn();
+    controls.follow(eye.copy(character.group.position).setY(character.group.position.y + EYE_HEIGHT));
+    requestRender();
+  };
+  /** The player changed their avatar or signed in or out: dress the character anew and tell everyone else. */
+  const refreshPlayer = () => {
+    character.setAvatar(getAvatarSpec()).then(() => {
+      headshot.capture();
+      sharePicture();
+      requestRender();
+    });
+    presence?.restart();
+  };
   let settings = QUALITY[quality] ?? QUALITY.High;
   let composer = null;
   let needsRender = true;
@@ -215,6 +265,7 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (watch.update(dt, time / 1000)) needsRender = true;
     if (others.update(dt)) needsRender = true;
     if (stickers.update(dt)) needsRender = true;
+    if (time < bubblesUntil) needsRender = true;
     if (controls.update(dt)) needsRender = true;
     const waterDue = settings.waterFps > 0 && time - lastDraw >= 1000 / settings.waterFps - 2;
     // The shop's show and the conveyors play at animFps, but only while on screen; off screen they cost nothing.
@@ -233,7 +284,10 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
 
   const observer = new ResizeObserver(resize);
   let countdownTimer = 0;
-  const start = () => {
+  /**
+   * `room`: the presence room to join ('lobby', or a Bloxity party's own); `onWelcome(room)` once in it.
+   */
+  const start = ({ room = 'lobby', onWelcome = () => {} } = {}) => {
     observer.observe(canvas);
     startPlayerInput();
     duel.start();
@@ -249,11 +303,20 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     if (!offline) {
       presence = connectPresence({
         name: getPlayerName,
-        avatar: () => {
-          const spec = getAvatarSpec();
-          return { skinUrl: spec.skinUrl, skinId: spec.equipped?.skinId };
+        avatar: getAvatarSpec,
+        room: () => room,
+      }, {
+        onWelcome: (_id, joinedRoom) => onWelcome(joinedRoom),
+        // Bloxity toasts a friend arriving in the room, or already in it when the player arrives.
+        onJoin: (list, existing) => {
+          others.onJoin(list);
+          for (const { name } of list) (existing ? playerInRoom : playerJoined)(name);
         },
-      }, others);
+        onLeave: others.onLeave,
+        onState: others.onState,
+        onSticker: (id, index) => others.onSticker(id, index),
+        onReset: others.onReset,
+      });
     }
     countdownTimer = setInterval(() => { lobby.apply(null); requestRender(); }, COUNTDOWN_REFRESH_MS);
     frame = requestAnimationFrame(loop);
@@ -290,5 +353,8 @@ export function createLobbyWorld(canvas, { quality = 'High', onDuelChange = () =
     renderer.dispose();
   };
 
-  return { start, applyLobby, setQuality, renderBallThumbs, sendSticker, duel: duel.actions, dispose };
+  return {
+    start, applyLobby, setQuality, renderBallThumbs, sendSticker, duel: duel.actions, dispose,
+    showChat, setChatEnabled, respawn, refreshPlayer, setCameraSensitivity: controls.setSensitivity,
+  };
 }

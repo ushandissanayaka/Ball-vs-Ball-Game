@@ -1,14 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { leaveArena } from '../objects/duelArenas.js';
 
-// Live sessions: token → { guestId, lastSeen }. Gameplay requests will name their session with the token.
+// Live sessions: token → { guestId, account, lastSeen }. Gameplay requests name their session with the token.
+// `guestId` is the profile the session plays as: a guest's own id, or 'legion:<id>' for a signed-in Bloxity
+// account (`account` is then { id, name }, as Bloxity vouched for it).
 // The client polls while it is on an arena spot (see the client's api.js), so 2 minutes of silence means it has gone.
 const SESSION_TTL_MS = 2 * 60_000;
 const sessions = new Map();
 
-export function createSession(guestId, now) {
+export function createSession(guestId, now, account = null) {
   const token = randomBytes(18).toString('base64url');
-  sessions.set(token, { guestId, lastSeen: now });
+  sessions.set(token, { guestId, account, lastSeen: now });
   return token;
 }
 
@@ -19,6 +21,9 @@ export function touchSession(token, now) {
   session.lastSeen = now;
   return session.guestId;
 }
+
+/** The Bloxity account a session is signed in as ({ id, name }), or null for a guest. */
+export const sessionAccount = (token) => sessions.get(token)?.account ?? null;
 
 setInterval(() => {
   const cutoff = Date.now() - SESSION_TTL_MS;

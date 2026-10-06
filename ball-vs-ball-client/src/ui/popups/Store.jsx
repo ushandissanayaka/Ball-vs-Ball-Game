@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { formatClock, nextCycleEnd, nextDailyReset } from '../../shared/constants.js';
-import { CRATES, DAILY_STORE, LIMITED_BUNDLE } from '../../shared/rewards.js';
+import { BUNDLE_SKU, CRATES, DAILY_STORE, LIMITED_BUNDLE, gemPackSku } from '../../shared/rewards.js';
+import { GemsPrice } from '../hooks/useBloxity.js';
 import { CoinIcon, GemIcon } from '../icons/Icons.jsx';
 import { BuxMark, EventsIcon, HornBallIcon, SplashIcon, UfoIcon } from '../icons/PopupIcons.jsx';
 import { ItemIcon, LightwingBallArt, LightwingVolleyArt, LightwingWingsArt } from '../icons/ItemArt.jsx';
@@ -22,11 +23,12 @@ function daysHours(ms) {
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
-function Price({ price }) {
+/** A coin price, or a Gems one (as Bloxity's catalog prices product `sku`). */
+function Price({ price, sku }) {
   return price.coins ? (
     <><CoinIcon className="store-price-icon" /><span className="outlined">{price.coins}</span></>
   ) : (
-    <><BuxMark className="store-price-icon" /><span className="outlined">{price.bux}</span></>
+    <><BuxMark className="store-price-icon" /><span className="outlined"><GemsPrice sku={sku} fallback={price.bux} /></span></>
   );
 }
 
@@ -54,7 +56,7 @@ function EventsView({ now, onBuy, onView, onBux }) {
                 <div className="store-item-name">{item.name}</div>
               </div>
               <button type="button" className={`store-buy ${item.price.coins ? 'coins' : 'bux'}`} onClick={() => onBuy(item)}>
-                <Price price={item.price} />
+                <Price price={item.price} sku={item.id} />
               </button>
             </div>
           ))}
@@ -74,7 +76,7 @@ function EventsView({ now, onBuy, onView, onBux }) {
         </div>
         <div className="bundle-buttons">
           <button type="button" className="bundle-view" onClick={onView}><span className="outlined">View &gt;</span></button>
-          <button type="button" className="bundle-buy" onClick={onBux}><Price price={LIMITED_BUNDLE.price} /></button>
+          <button type="button" className="bundle-buy" onClick={onBux}><Price price={LIMITED_BUNDLE.price} sku={BUNDLE_SKU} /></button>
         </div>
       </div>
     </>
@@ -90,9 +92,9 @@ export default function Store({ profile, now, actions, onClose }) {
   const [view, setView] = useState('events');
   const [note, setNote] = useState(null);
   const [reveal, setReveal] = useState(null); // { kind, prizes }
-  const [gift, setGift] = useState(null); // { name, bux }
+  const [gift, setGift] = useState(null); // { id (sku), name, bux }
   const [prizeList, setPrizeList] = useState(null); // a crate id
-  const [paying, setPaying] = useState(null); // { id, name, bux, giftTo? }: the payment window
+  const [paying, setPaying] = useState(null); // { id (sku), name, bux, giftTo? }: the payment window
   useEffect(() => {
     if (!note) return undefined;
     const timer = setTimeout(() => setNote(null), 2200);
@@ -117,7 +119,7 @@ export default function Store({ profile, now, actions, onClose }) {
   };
   const sendGift = (friend, item) => {
     setGift(null);
-    pay({ ...item, giftTo: friend.name });
+    pay({ ...item, giftTo: { id: friend.id, name: friend.name } });
   };
   const overlays = (
     <>
@@ -166,7 +168,7 @@ export default function Store({ profile, now, actions, onClose }) {
         {view === 'events' && (
           <EventsView
             now={now} onBuy={buy} onView={() => setView('bundle')}
-            onBux={() => pay({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: LIMITED_BUNDLE.price.bux })}
+            onBux={() => pay({ id: BUNDLE_SKU, name: `${LIMITED_BUNDLE.name} Bundle`, bux: LIMITED_BUNDLE.price.bux })}
           />
         )}
         {TAB_KIND[view] && (
@@ -177,8 +179,8 @@ export default function Store({ profile, now, actions, onClose }) {
         )}
         {view === 'gems' && (
           <GemsView
-            gemsDay={profile.gemsDay} now={now} onBuy={(pack) => pay({ id: `gems_${pack.gems}`, name: `${pack.gems} Diamonds`, bux: pack.bux })} onClaimDaily={claimGems}
-            onGift={(pack) => setGift({ id: `gems_${pack.gems}`, name: `${pack.gems} Diamonds`, bux: pack.bux })}
+            gemsDay={profile.gemsDay} now={now} onBuy={(pack) => pay({ id: gemPackSku(pack), name: `${pack.gems} Diamonds`, bux: pack.bux })} onClaimDaily={claimGems}
+            onGift={(pack) => setGift({ id: gemPackSku(pack), name: `${pack.gems} Diamonds`, bux: pack.bux })}
           />
         )}
       </section>

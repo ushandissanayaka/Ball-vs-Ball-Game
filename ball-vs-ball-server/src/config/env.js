@@ -13,6 +13,11 @@ export const config = {
   // Any local port: Vite moves to 5174, 5175... when 5173 is taken by another project.
   allowedOrigins: list(process.env.CLIENT_ORIGIN, 'http://localhost:*,http://127.0.0.1:*'),
   dataDir: resolve(serverRoot, process.env.DATA_DIR || 'data'),
+  // Bloxity: the slug this game is registered under, where its API is, and the secret its Gems webhook sends
+  // (x-legion-webhook-secret). Without a secret the webhook refuses every call (Bloxity then refunds the Gems).
+  gameSlug: process.env.BLOXITY_GAME_SLUG || 'ball-vs-ball',
+  bloxityApiUrl: (process.env.BLOXITY_API_URL || 'https://api.bloxity.io').replace(/\/$/, ''),
+  webhookSecret: process.env.BLOXITY_WEBHOOK_SECRET || '',
 };
 
 const escapeRegExp = (text) => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&');

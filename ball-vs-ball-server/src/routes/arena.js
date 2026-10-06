@@ -4,7 +4,7 @@ import { DUEL_TIMING, chooseBall, lockAim, reroll } from '../shared/duelMatch.js
 import { actInDuel, arenaState, joinArena, leaveArena } from '../objects/duelArenas.js';
 import { guestBalls, publicProfile } from '../players/profiles.js';
 import { getProfile, setProfile } from '../progress/profileStore.js';
-import { touchSession } from '../players/sessions.js';
+import { sessionAccount, touchSession } from '../players/sessions.js';
 import { playerInfo } from '../players/playerInfo.js';
 
 /**
@@ -36,7 +36,7 @@ export function arenaRouter() {
     const now = Date.now();
     const { arenaId, spot } = request.body ?? {};
     // The balls this player may use come from their saved level, never from what the client says.
-    const info = { ...playerInfo(request.body), allowed: guestBalls(getProfile(guestId)) };
+    const info = { ...playerInfo(request.body, sessionAccount(String(request.body?.sessionToken ?? ''))), allowed: guestBalls(getProfile(guestId)) };
     const result = joinArena(guestId, String(arenaId ?? ''), String(spot ?? ''), info, now);
     if (result.error) response.status(409).json(result);
     else response.json({ serverTime: now, ...result });

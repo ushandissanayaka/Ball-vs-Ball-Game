@@ -1,5 +1,6 @@
 import React from 'react';
-import { LIMITED_BUNDLE } from '../../../shared/rewards.js';
+import { BUNDLE_BALL_SKU, BUNDLE_SKU, LIMITED_BUNDLE } from '../../../shared/rewards.js';
+import { GemsPrice } from '../../hooks/useBloxity.js';
 import { BuxMark } from '../../icons/PopupIcons.jsx';
 import { CycleIcon, GiftIcon, LightwingBallArt, LightwingSceneArt, LightwingVolleyArt, LightwingWingsArt } from '../../icons/ItemArt.jsx';
 
@@ -37,10 +38,10 @@ export default function BundleView({ endsIn, onBuy, onGift, onClose }) {
         <h3 className="bundle-box-title">BALL ONLY</h3>
         <SerialCard kind="ball" />
         <div className="ball-only-name">{ballOnly.name}</div>
-        <button type="button" className="bundle-buy-small" onClick={() => onBuy({ id: 'lightwing_ball', name: ballOnly.name, bux: ballOnly.price.bux })}>
-          <span className="outlined">Buy</span><BuxMark className="bundle-bux" /><span className="outlined">{ballOnly.price.bux}</span>
+        <button type="button" className="bundle-buy-small" onClick={() => onBuy({ id: BUNDLE_BALL_SKU, name: ballOnly.name, bux: ballOnly.price.bux })}>
+          <span className="outlined">Buy</span><BuxMark className="bundle-bux" /><span className="outlined"><GemsPrice sku={BUNDLE_BALL_SKU} fallback={ballOnly.price.bux} /></span>
         </button>
-        <button type="button" className="bundle-gift-small" onClick={() => onGift({ id: 'lightwing_ball', name: ballOnly.name, bux: ballOnly.price.bux })}>
+        <button type="button" className="bundle-gift-small" onClick={() => onGift({ id: BUNDLE_BALL_SKU, name: ballOnly.name, bux: ballOnly.price.bux })}>
           <GiftIcon className="bundle-gift-icon" /><span>Gift</span>
         </button>
       </div>
@@ -55,10 +56,10 @@ export default function BundleView({ endsIn, onBuy, onGift, onClose }) {
             </div>
           ))}
         </div>
-        <button type="button" className="bundle-buy-big" onClick={() => onBuy({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
-          <span className="outlined">Buy</span><BuxMark className="bundle-bux big" /><span className="outlined">{price.bux}</span>
+        <button type="button" className="bundle-buy-big" onClick={() => onBuy({ id: BUNDLE_SKU, name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
+          <span className="outlined">Buy</span><BuxMark className="bundle-bux big" /><span className="outlined"><GemsPrice sku={BUNDLE_SKU} fallback={price.bux} /></span>
         </button>
-        <button type="button" className="bundle-gift-big" onClick={() => onGift({ id: 'lightwing_bundle', name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
+        <button type="button" className="bundle-gift-big" onClick={() => onGift({ id: BUNDLE_SKU, name: `${LIMITED_BUNDLE.name} Bundle`, bux: price.bux })}>
           <GiftIcon className="bundle-gift-icon big" /><span>Gift</span>
         </button>
       </div>

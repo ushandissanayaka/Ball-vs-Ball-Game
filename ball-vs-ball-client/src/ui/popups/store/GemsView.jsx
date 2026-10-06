@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatClock, nextDailyReset, utcDayKey } from '../../../shared/constants.js';
-import { DAILY_GEMS, GEM_PACKS } from '../../../shared/rewards.js';
+import { DAILY_GEMS, GEM_PACKS, gemPackSku } from '../../../shared/rewards.js';
+import { GemsPrice } from '../../hooks/useBloxity.js';
 import { GemIcon } from '../../icons/Icons.jsx';
 import { BuxMark } from '../../icons/PopupIcons.jsx';
 import { GemPackArt, GiftIcon } from '../../icons/ItemArt.jsx';
@@ -22,7 +23,7 @@ export default function GemsView({ gemsDay, now, onBuy, onGift, onClaimDaily }) 
             {pack.bonus && <div className="gem-pack-bonus">+{pack.bonus}%</div>}
             <GemPackArt className="gem-pack-art" tier={i} />
             <button type="button" className="gem-pack-buy" onClick={() => onBuy(pack)}>
-              <BuxMark className="gem-pack-bux" /><span>{pack.bux}</span>
+              <BuxMark className="gem-pack-bux" /><span><GemsPrice sku={gemPackSku(pack)} fallback={pack.bux} /></span>
             </button>
           </div>
         ))}

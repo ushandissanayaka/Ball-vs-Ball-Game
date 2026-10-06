@@ -8,7 +8,7 @@ import { CAMERA } from '../config/layout.js';
  * and the camera never goes under the water. `view` ([x, y, z, tx, ty, tz], the ?cam= debug option) starts on a set view and stops
  * following, for screenshots. `setCinematic(position, target)` takes the camera off the player (a duel): it
  * glides to that shot and stays on it, following each new one; `clearCinematic(point)` hands it back, orbiting
- * `point`. `update(dt)` returns true when the view changed.
+ * `point`. `update(dt)` returns true when the view changed. `setSensitivity(k)` scales how fast a drag turns it.
  */
 export function createCameraControls(camera, element, view = null) {
   const controls = new OrbitControls(camera, element);
@@ -85,5 +85,10 @@ export function createCameraControls(camera, element, view = null) {
     element.removeEventListener('contextmenu', noMenu);
     controls.dispose();
   };
-  return { update, follow, setCinematic, clearCinematic, dispose };
+  /** How fast dragging turns the camera (the portal's camera sensitivity: 1 is normal). */
+  const setSensitivity = (value) => {
+    controls.rotateSpeed = value;
+  };
+
+  return { update, follow, setCinematic, clearCinematic, setSensitivity, dispose };
 }

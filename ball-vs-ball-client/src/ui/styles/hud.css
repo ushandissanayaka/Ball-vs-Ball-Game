@@ -529,3 +529,42 @@
 @media (prefers-reduced-motion: reduce) {
   .badge, .badge-heart, .badge-ball-name, .hud .ball-card, .fight-banner, .duel-result, .duel-dim { animation: none; }
 }
+
+/* ---- Bloxity account (top right, over the quests): Log in, or the player's picture, name and Gems --------- */
+.account {
+  position: relative; z-index: 2; display: flex; justify-content: flex-end; align-items: center; gap: calc(10 * var(--u)); margin-bottom: calc(10 * var(--u));
+  font-family: "Montserrat", "Segoe UI", Arial, sans-serif; letter-spacing: 0;
+}
+.hud .account-login {
+  flex: none; height: calc(48 * var(--u)); padding: 0 calc(20 * var(--u)); border-radius: calc(10 * var(--u));
+  background: #335fff; font-size: calc(20 * var(--u)); font-weight: 700; box-shadow: 0 calc(4 * var(--u)) 0 #1d3cc0;
+}
+.hud .account-chip {
+  display: flex; align-items: center; gap: calc(12 * var(--u)); height: calc(56 * var(--u)); padding: 0 calc(18 * var(--u)) 0 calc(6 * var(--u));
+  background: rgba(25, 26, 29, 0.86); border: calc(1.5 * var(--u)) solid #3c3d42; border-radius: calc(28 * var(--u));
+  font-size: calc(18 * var(--u)); font-weight: 700;
+}
+.account-pfp {
+  display: grid; place-items: center; width: calc(44 * var(--u)); height: calc(44 * var(--u)); flex: none; overflow: hidden;
+  border-radius: 50%; background: #335fff; font-size: calc(20 * var(--u));
+}
+.account-pfp img, .account-pfp canvas { width: 100%; height: 100%; object-fit: cover; }
+/* The character's face sits on a sky-blue disc, like a portrait. */
+.account-pfp:has(canvas) { background: radial-gradient(circle at 50% 35%, #8fd3ff, #3a7fe0); }
+.account-who { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; min-width: 0; }
+.account-guest { font-size: calc(12 * var(--u)); font-weight: 600; color: #a8a8ac; }
+.account-name { max-width: calc(150 * var(--u)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-gems { display: flex; align-items: center; gap: calc(6 * var(--u)); padding-left: calc(12 * var(--u)); border-left: calc(1.5 * var(--u)) solid #3c3d42; }
+.account-bux { width: calc(20 * var(--u)); height: calc(20 * var(--u)); }
+.account-menu {
+  position: absolute; top: 100%; right: 0; display: flex; flex-direction: column; margin-top: calc(8 * var(--u)); padding: calc(6 * var(--u)); width: max-content; min-width: calc(180 * var(--u));
+  background: #191a1d; border: calc(1.5 * var(--u)) solid #3c3d42; border-radius: calc(10 * var(--u)); pointer-events: auto;
+}
+.hud .account-menu button { padding: calc(10 * var(--u)) calc(14 * var(--u)); border-radius: calc(6 * var(--u)); text-align: left; font-size: calc(17 * var(--u)); font-weight: 600; }
+.hud .account-menu button:hover { background: #2a2b30; scale: 1; translate: 0; }
+
+/* Frames per second, top centre (the portal's Show FPS setting). */
+.fps-counter {
+  position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 50; padding: 2px 8px; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55); color: #9cf3ff; font: 600 12px/1.4 "Montserrat", monospace; pointer-events: none;
+}

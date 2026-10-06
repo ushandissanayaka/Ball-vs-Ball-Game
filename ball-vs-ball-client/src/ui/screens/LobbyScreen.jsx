@@ -15,6 +15,8 @@ import Inventory from '../popups/Inventory.jsx';
 import EmoteWheel from '../popups/EmoteWheel.jsx';
 import { clickSound } from '../../audio/sfx.js';
 import Stickers from '../hud/Stickers.jsx';
+import Account from '../hud/Account.jsx';
+import { isEmbedded, showPortalMenu } from '../../bloxity/sdk.js';
 
 /** Restarts the little lift-and-pop on whichever HUD button was clicked (see .pop in hud.css). */
 function popButton(event) {
@@ -30,9 +32,11 @@ function popButton(event) {
  * The HUD laid over the 3D world. Only its controls catch the pointer; drags elsewhere move the camera. On a
  * duel square the lobby panels give way to the duel's (the wallet stays for choosing, where gems buy rerolls).
  * One window at a time opens over the lobby: Daily Rewards (open when the game starts), Store, Inventory, or
- * the emote wheel (also on R). Escape closes it.
+ * the emote wheel (also on R). Escape closes it; with nothing open, inside bloxity.io it opens the portal's menu.
+ * Top right, over the quests, the player's profile: their Bloxity account (`user`, Gems balance `gems`) or, as a
+ * guest, their suggested name; `picture` is their Legion character's face.
  */
-export default function LobbyScreen({ lobby, profile, duel, duelActions, shopActions, onSticker }) {
+export default function LobbyScreen({ lobby, profile, duel, duelActions, shopActions, onSticker, user, gems, picture }) {
   const now = useNow(1000);
   const inDuel = Boolean(duel.duel);
   const [popup, setPopup] = useState('daily');
@@ -51,13 +55,18 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
     const timer = setTimeout(() => setLevelUp(null), 5000);
     return () => clearTimeout(timer);
   }, [showLevelUp]);
+  const popupRef = useRef(popup);
+  popupRef.current = popup;
   const toggle = (name) => setPopup((current) => (current === name ? null : name));
   const close = () => setPopup(null);
 
   useEffect(() => {
     const onKey = (event) => {
       if (event.target.closest?.('input, textarea') || event.repeat) return;
-      if (event.code === 'Escape') setPopup(null);
+      if (event.code === 'Escape') {
+        if (!popupRef.current && !document.querySelector('.invite-backdrop, .pay-backdrop, .gift-backdrop') && isEmbedded()) showPortalMenu();
+        setPopup(null);
+      }
       if (event.code === 'KeyR' && !inDuel) toggle('emotes');
     };
     window.addEventListener('keydown', onKey);
@@ -70,6 +79,7 @@ export default function LobbyScreen({ lobby, profile, duel, duelActions, shopAct
         <>
           <SideMenu onOpen={toggle} />
           <div className="hud-right">
+            <Account user={user} gems={gems} picture={picture} />
             <QuestPanel quests={profile.quests} resetsAt={profile.questsResetAt} now={now} />
             <QuickJoin entries={lobby.quickJoin} />
           </div>
